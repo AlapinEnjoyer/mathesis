@@ -18,13 +18,40 @@ export type OpenQuestion = {
   correctAnswer?: string
   explanation?: string
   askedAt: string
+  /** No form could be shown; the agent asks another way and records the reply with mathesis_answer_record. */
+  fallback?: boolean
 }
+
+/** A question the learner answered in this session. Tools that grade or create cards check against these. */
+export type AnswerRecord = {
+  questionID: string
+  kind: "quiz" | "explain"
+  type: QuestionType
+  prompt: string
+  nodeId?: string
+  ideaId?: string
+  status: "answered" | "dont_know"
+  /** Multiple choice: graded mechanically. Free recall: undefined until the agent grades it. */
+  correct?: boolean
+  choice?: number
+  text?: string
+  confidence?: number
+  thinking?: string
+  answeredAt: string
+  elapsedMs?: number
+  /** The tool call that already used this answer (a card, a review), so it cannot count twice. */
+  usedBy?: string
+}
+
+export const ANSWERS_KEPT = 30
 
 export type SessionState = {
   phase: Phase
   topic?: string
   currentNode?: string
   openQuestion?: OpenQuestion
+  /** Recent answers, newest last (at most ANSWERS_KEPT). */
+  answers?: AnswerRecord[]
   /** Ideas already reviewed or practised in this session. */
   done?: string[]
   updatedAt: string
