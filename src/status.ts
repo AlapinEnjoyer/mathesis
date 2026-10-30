@@ -1,4 +1,4 @@
-import { dueLabel, ideaState, topicIdeas, type Runtime } from "./runtime.ts"
+import { cardCount, dueLabel, ideaState, topicIdeas, type Runtime } from "./runtime.ts"
 import { isDue, parseDate } from "./srs/fsrs.ts"
 import { readLog } from "./store/log.ts"
 
@@ -14,7 +14,7 @@ export async function status(rt: Runtime): Promise<{ due: number; cards: number;
   ])
   const cards = ideas.filter((idea) => idea.srs)
   const due = cards.filter((idea) => isDue(idea.srs, now))
-  const lines: string[] = [`${due.length} of ${cards.length} cards due.`]
+  const lines: string[] = [`${due.length} of ${cardCount(cards.length)} due.`]
   const next = cards
     .map((idea) => parseDate(idea.srs?.due))
     .filter((d): d is Date => !!d && d.getTime() > now.getTime())
@@ -25,7 +25,7 @@ export async function status(rt: Runtime): Promise<{ due: number; cards: number;
     for (const topic of topics) {
       const own = topicIdeas(topic, ideas)
       const ownDue = own.filter((idea) => isDue(idea.srs, now)).length
-      lines.push(`  ${topic.goal}: ${own.length} cards${ownDue ? `, ${ownDue} due` : ""}`)
+      lines.push(`  ${topic.goal}: ${cardCount(own.length)}${ownDue ? `, ${ownDue} due` : ""}`)
     }
   }
   const since = now.getTime() - RECENT_DAYS * 86_400_000

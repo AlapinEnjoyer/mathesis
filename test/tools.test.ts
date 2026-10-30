@@ -7,6 +7,7 @@ import { resolveConfig } from "../src/config.ts"
 import type { Runtime } from "../src/runtime.ts"
 import { review as fsrsReview } from "../src/srs/fsrs.ts"
 import { getSession, memoryStore, setPhase } from "../src/state.ts"
+import { panel } from "../src/panel.ts"
 import { status } from "../src/status.ts"
 import { readLog } from "../src/store/log.ts"
 import { Vault } from "../src/store/vault.ts"
@@ -225,7 +226,7 @@ describe("status and lists", () => {
     expect(status).toContain("Session phase: teach · current node: `interval`")
     expect(status).toContain("▶ Half-open interval `interval`")
     expect(status).toContain("- `interval` (proposition, held, due in")
-    expect(await call("topic_list")).toContain("(1 cards, 0 due)")
+    expect(await call("topic_list")).toContain("(1 card, 0 due)")
   })
 
   test("tools that need a topic refuse in a session without one", async () => {
@@ -448,5 +449,24 @@ describe("practice", () => {
     await setPhase(rt.store, "other", "review", {}, clock)
     const result = await runTool(tools.get("practice_targets")!, rt, {}, { sessionID: "other", signal: new AbortController().signal, progress: async () => {} })
     expect(result).toContain("not available in the review phase")
+  })
+})
+
+describe("panel", () => {
+  test("shows the phase, the plan with marks and the due cards", async () => {
+    await toTeach()
+    reply = () => ({ answer: "0", confidence: "90" })
+    await call("idea_upsert", { questionID: lastQuestionID(await call("quiz", quiz())), claim: "c", why: "w" })
+    const view = await panel(rt, SESSION)
+    expect(view.title).toBe("Mathesis: how binary search finds its bounds")
+    expect(view.text).toContain("Phase: teach")
+    expect(view.text).toContain("· Sorted array\n  ▶ Half-open interval")
+    expect(view.text).toContain("No cards due.")
+    clock = new Date("2027-01-01T10:00:00.000Z")
+    await rt.store.set(`session/${SESSION}`, { ...(await getSession(rt.store, SESSION))!, currentNode: "bounds" })
+    const later = await panel(rt, SESSION)
+    expect(later.text).toContain("↻ Half-open interval")
+    expect(later.text).toContain("Due (1)\n  ↻ interval (overdue by")
+    expect((await panel(rt, "unknown")).text).toContain("not a Mathesis session")
   })
 })

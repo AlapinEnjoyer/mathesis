@@ -4,6 +4,7 @@ import { promptCache } from "./compose.ts"
 import { resolveConfig } from "./config.ts"
 import { Mathesis, type SetupInput, type StartInput } from "./rpc.ts"
 import type { Runtime } from "./runtime.ts"
+import { panel } from "./panel.ts"
 import { AGENT_NAME, setup, startSession } from "./sessions.ts"
 import { status } from "./status.ts"
 import { getSession } from "./state.ts"
@@ -91,6 +92,7 @@ export default Plugin.define({
         }
       },
       status: async () => status(rt),
+      panel: async (input) => panel(rt, (input as { sessionID: string }).sessionID),
       setup: async (input) => setup(rt, (input ?? {}) as SetupInput),
     })
     emit = (name, data) => void registration.events.emit(name as never, data as never).catch(() => {})

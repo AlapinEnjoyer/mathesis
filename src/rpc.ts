@@ -97,6 +97,11 @@ export const Mathesis = Rpc.define({
       input: obj({}),
       output: obj({ due: { type: "number" }, cards: { type: "number" }, text: str }, ["due", "cards", "text"]),
     },
+    /** The side panel's text for a session. */
+    panel: {
+      input: obj({ sessionID: str }, ["sessionID"]),
+      output: obj({ title: str, text: str }, ["title", "text"]),
+    },
     /** Writes the agent file and the vault folders; stores the model choice. */
     setup: {
       input: obj({

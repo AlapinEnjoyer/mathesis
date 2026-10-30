@@ -56,3 +56,6 @@ export function topicIdeas(topic: Topic, ideas: readonly Idea[]): Idea[] {
   const listed = new Set(topic.ideas)
   return ideas.filter((idea) => listed.has(idea.id) || idea.topic === topic.id)
 }
+
+/** "1 card", "3 cards". */
+export const cardCount = (n: number) => `${n} card${n === 1 ? "" : "s"}`
