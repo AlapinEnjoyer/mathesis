@@ -1,0 +1,254 @@
+[
+ {
+  "user": "Reply with exactly: A"
+ },
+ {
+  "assistant": [
+   "A"
+  ],
+  "tokens": {
+   "input": 7133,
+   "output": 5,
+   "reasoning": 0,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Reply with exactly: B"
+ },
+ {
+  "assistant": [
+   "reasoning",
+   "B"
+  ],
+  "tokens": {
+   "input": 19,
+   "output": 7,
+   "reasoning": 13,
+   "cache": {
+    "read": 7130,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Reply with exactly: C"
+ },
+ {
+  "assistant": [
+   "C"
+  ],
+  "tokens": {
+   "input": 34,
+   "output": 5,
+   "reasoning": 0,
+   "cache": {
+    "read": 7146,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Call mathesis_spike_phase with phase \"probe\", then reply with exactly: D"
+ },
+ {
+  "assistant": [
+   "tool"
+  ],
+  "tokens": {
+   "input": 31,
+   "output": 21,
+   "reasoning": 0,
+   "cache": {
+    "read": 7177,
+    "write": 0
+   }
+  }
+ },
+ {
+  "assistant": [
+   "reasoning",
+   "D"
+  ],
+  "tokens": {
+   "input": 7258,
+   "output": 7,
+   "reasoning": 9,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Reply with exactly: E"
+ },
+ {
+  "assistant": [
+   "reasoning",
+   "E"
+  ],
+  "tokens": {
+   "input": 30,
+   "output": 7,
+   "reasoning": 7,
+   "cache": {
+    "read": 7255,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Reply with exactly: F"
+ },
+ {
+  "assistant": [
+   "F"
+  ],
+  "tokens": {
+   "input": 28,
+   "output": 5,
+   "reasoning": 0,
+   "cache": {
+    "read": 7282,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Call mathesis_spike_instructions with value \"node=binary-search\", then reply with exactly: G"
+ },
+ {
+  "assistant": [
+   "tool"
+  ],
+  "tokens": {
+   "input": 35,
+   "output": 25,
+   "reasoning": 0,
+   "cache": {
+    "read": 7307,
+    "write": 0
+   }
+  }
+ },
+ {
+  "assistant": [
+   "reasoning",
+   "G"
+  ],
+  "tokens": {
+   "input": 78,
+   "output": 7,
+   "reasoning": 29,
+   "cache": {
+    "read": 7339,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Reply with exactly: H"
+ },
+ {
+  "assistant": [
+   "H"
+  ],
+  "tokens": {
+   "input": 50,
+   "output": 5,
+   "reasoning": 0,
+   "cache": {
+    "read": 7414,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Reply with exactly: I"
+ },
+ {
+  "assistant": [
+   "reasoning",
+   "I"
+  ],
+  "tokens": {
+   "input": 19,
+   "output": 7,
+   "reasoning": 5,
+   "cache": {
+    "read": 7461,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Call mathesis_spike_phase with phase \"drop-tools\", then reply with exactly: J"
+ },
+ {
+  "assistant": [
+   "tool"
+  ],
+  "tokens": {
+   "input": 39,
+   "output": 22,
+   "reasoning": 0,
+   "cache": {
+    "read": 7477,
+    "write": 0
+   }
+  }
+ },
+ {
+  "assistant": [
+   "J"
+  ],
+  "tokens": {
+   "input": 7526,
+   "output": 5,
+   "reasoning": 0,
+   "cache": {
+    "read": 0,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Reply with exactly: K"
+ },
+ {
+  "assistant": [
+   "reasoning",
+   "K"
+  ],
+  "tokens": {
+   "input": 19,
+   "output": 7,
+   "reasoning": 21,
+   "cache": {
+    "read": 7523,
+    "write": 0
+   }
+  }
+ },
+ {
+  "user": "Reply with exactly: L"
+ },
+ {
+  "assistant": [
+   "L"
+  ],
+  "tokens": {
+   "input": 42,
+   "output": 5,
+   "reasoning": 0,
+   "cache": {
+    "read": 7539,
+    "write": 0
+   }
+  }
+ }
+]
