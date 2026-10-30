@@ -23,6 +23,7 @@ export const TOOL_PHASES: Readonly<Record<string, readonly Phase[] | null>> = {
   review_next: ["review"],
   review_grade: ["review"],
   practice_targets: ["practice"],
+  practice_record: ["practice"],
 }
 
 /** Allowed phase changes. A learn session goes probe → teach once; review and practice sessions keep their phase. */

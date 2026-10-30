@@ -41,7 +41,9 @@ export function formatModel(model: ModelRef): string {
  * resolved against the home directory, so the vault does not move with the project opencode runs in.
  */
 export function resolveConfig(options: Readonly<Record<string, unknown>>, base = homedir()): Config {
-  const vaultOption = typeof options.vault === "string" && options.vault.trim() ? options.vault.trim() : DEFAULT_VAULT
+  // MATHESIS_VAULT overrides the option, for development and tests.
+  const fromEnv = process.env.MATHESIS_VAULT?.trim()
+  const vaultOption = fromEnv || (typeof options.vault === "string" && options.vault.trim() ? options.vault.trim() : DEFAULT_VAULT)
   const expanded = expandHome(vaultOption)
   const vault = isAbsolute(expanded) ? expanded : resolve(base, expanded)
 

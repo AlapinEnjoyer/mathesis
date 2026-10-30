@@ -47,3 +47,47 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   header for adapted LearnHarness text, which stays in the source files.
 - **Phase transitions:** probe → teach, and teach → probe (re-probe a topic). Review and practice sessions keep their
   phase. A session without a phase can enter any phase.
+
+## Phase 2 (probe and teach)
+
+- **Question path, as built and tested in the TUI (2026-10-30):** the tool commits the answer key, the broker emits
+  `questionAsked`, the first TUI to `claim` creates the native form with the fixed id `frm_mathesis_<questionID>`,
+  and the server watches `form.replied` / `form.cancelled` itself; a TUI also relays them (the first outcome wins).
+  A restarted TUI calls `pending` and `form.get` to show or settle open questions. No claim within `claimTimeoutMs`
+  (default 4 s) → `fallback: true`, then `mathesis_answer_record`.
+- **The answer key is a nested `answerKey` object.** The TUI's tool-call line shows only scalar inputs (`question`,
+  `type`, `nodeId`), so the committed answer stays hidden while the form is open (checked in the TUI).
+- **Only a passed check creates a card**, and only through the answer record that the question tool stored in the
+  session: `idea_upsert` needs the `questionID` of a `check` that was answered correctly (multiple choice) or graded
+  correct/partial by the agent (free recall). One answer can be used once.
+- **Free-recall grading stays with the conversation model** (handoff §2c): the tool returns the learner's words next
+  to the committed answer, and the agent passes its verdict to the tool that records the outcome.
+- **`/learn`, `/mathesis-setup` are TUI commands** that call RPC `start` / `setup`; the server creates the session
+  with the model (validated against the model list), the `mathesis` agent when it exists, and per-session permissions
+  (edit only the vault, no shell).
+- **`topic_start` never creates a second topic in a session that has one**, unless `topic` is passed explicitly
+  (found in the TUI test: the agent restated the goal in other words).
+- **`/mathesis-setup` rewrites the agent file only while it still has the `<!-- mathesis-agent v… -->` marker.**
+  Remove the marker to keep your own edits.
+- **Misconception cards** have `kind: misconception`, `about: [ids]`, the right model as Claim and the wrong model
+  under "Known misconceptions"; the ideas they corrupt link to them. Recording one again rates it Again.
+
+### Phase 2 review fixes
+
+- **A question cannot lock a session.** If the broker no longer knows the open question (server restart), the next
+  tool call turns it into a fallback question instead of refusing. Unloading the plugin aborts open questions.
+- **Claim, then show, in time.** After a claim the TUI must report `shown` within 15 s; a TUI that dies or cannot
+  create the form makes the question fall back instead of hanging. A failed form creation hands the question back.
+- **State changes that check something are atomic** (`mutateSession` under the session lock): one open question per
+  session, one use per answer (released again if the card write fails), one misconception card per answer and id.
+- **`idea_upsert` can only prove the check's own node or a new idea**; it refuses misconception cards and cards of
+  another topic. `misconception_record` with a `questionID` needs a real answer that was not right.
+- **`answer_record` needs a reply from the learner** after the fallback: a chat message (session `prompt` hook) or an
+  answer to the built-in `question` tool (tool `execute.after` hook). Fallback answers are marked in the session note.
+- **Mathesis tools are hidden in sessions that are not Mathesis sessions** (another agent and no Mathesis state).
+  This depends only on the session, so the tool list stays constant within it.
+- **Mathesis sessions and the agent deny all file edits and shell commands.** The Mathesis tools write the vault
+  themselves; reading the learner's files stays allowed.
+- **TUI calls go to the location of the event**, and the TUI subscribes again after `server.connected`.
+- **Not verified yet:** whether the TUI sends its own selected model with the learner's next message in a session
+  that Mathesis created with another model (that would switch the model mid-session).
