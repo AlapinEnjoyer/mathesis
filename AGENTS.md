@@ -11,7 +11,7 @@ Phase-0 findings about the real opencode API are in `docs/spike.md`; they win ov
   before you use a method.
 
 ## Load locally
-Add the absolute repo path to `plugins` in `~/.config/opencode/opencode.jsonc`, then restart opencode.
+Add the absolute repo path to `plugins` in `~/.config/opencode/opencode.jsonc`, then restart opencode. Set `MATHESIS_VAULT` to use a throwaway vault while testing.
 
 ## Test in opencode
 - Run `opencode --standalone` from the repo (a private server, so the user's background service is not touched),
