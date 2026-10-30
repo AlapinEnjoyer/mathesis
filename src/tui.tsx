@@ -168,6 +168,19 @@ export default Plugin.define({
       if (typed?.trim()) return start({ kind: "learn", goal: typed.trim() })
     }
 
+    async function topicArg(input: string | undefined): Promise<string | undefined> {
+      return input?.trim() ? input.trim() : undefined
+    }
+
+    async function showStatus() {
+      try {
+        const result = (await rpc().status({})) as { text: string }
+        await context.ui.dialog.alert({ title: "Mathesis", message: result.text })
+      } catch (error) {
+        context.ui.toast.show({ title: "Mathesis", message: errorText(error), variant: "error" })
+      }
+    }
+
     async function setupCommand() {
       const same = await context.ui.dialog.confirm({
         title: "Mathesis setup",
@@ -226,6 +239,29 @@ export default Plugin.define({
           palette: true,
           slash: { name: "learn", arguments: true },
           run: (input) => learn(input),
+        },
+        {
+          id: "mathesis.recall",
+          title: "Mathesis: spaced review of due cards",
+          group: "Mathesis",
+          palette: true,
+          slash: { name: "recall", arguments: true },
+          run: async (input) => {
+            const topic = await topicArg(input)
+            if (!topic) {
+              const { due } = (await rpc().status({})) as { due: number }
+              if (due === 0) return context.ui.toast.show({ title: "Mathesis", message: "No cards are due.", variant: "info" })
+            }
+            return start({ kind: "recall", topic })
+          },
+        },
+        {
+          id: "mathesis.status",
+          title: "Mathesis: status",
+          group: "Mathesis",
+          palette: true,
+          slash: { name: "mathesis" },
+          run: () => showStatus(),
         },
         {
           id: "mathesis.setup",

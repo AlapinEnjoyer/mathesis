@@ -5,15 +5,18 @@ import { join } from "node:path"
 import { QuestionBroker } from "../src/broker.ts"
 import { resolveConfig } from "../src/config.ts"
 import type { Runtime } from "../src/runtime.ts"
-import { getSession, memoryStore } from "../src/state.ts"
+import { review as fsrsReview } from "../src/srs/fsrs.ts"
+import { getSession, memoryStore, setPhase } from "../src/state.ts"
+import { status } from "../src/status.ts"
 import { readLog } from "../src/store/log.ts"
 import { Vault } from "../src/store/vault.ts"
 import { runTool, type ToolSpec } from "../src/tools/define.ts"
 import { noteLearnerReply, questionTools } from "../src/tools/questions.ts"
+import { pickNext, reviewTools, suggestMode } from "../src/tools/review.ts"
 import { teachTools } from "../src/tools/teach.ts"
 import { topicTools } from "../src/tools/topics.ts"
 
-const tools = new Map([...topicTools, ...questionTools, ...teachTools].map((t) => [t.name, t] as [string, ToolSpec]))
+const tools = new Map([...topicTools, ...questionTools, ...teachTools, ...reviewTools].map((t) => [t.name, t] as [string, ToolSpec]))
 const SESSION = "ses_test"
 let root: string
 let rt: Runtime
@@ -307,5 +310,97 @@ describe("phase 2 review fixes", () => {
     const note = await readFile(join(root, "sessions", `${clock.toISOString().slice(0, 10)}-how-binary-search-finds-its-bounds-learn.md`), "utf8")
     expect(note).toContain("**Question:** \\## Not a heading")
     expect(note).toContain("Recorded by the agent from the learner's reply")
+  })
+})
+
+
+describe("spaced review", () => {
+  const day = 86_400_000
+  async function card(id: string, topic: string, daysAgoDue: number, extra: Record<string, unknown> = {}) {
+    const learned = new Date(clock.getTime() - 30 * day)
+    const srs = { ...fsrsReview(undefined, "good", learned), due: new Date(clock.getTime() - daysAgoDue * day).toISOString() }
+    await rt.vault.upsertIdea({ id, topic, claim: `claim of ${id}`, why: `why ${id}`, srs, ...extra }, clock)
+    await rt.vault.updateTopic(topic, { goal: topic, addIdeas: [id] }, clock)
+  }
+
+  beforeEach(async () => {
+    await card("slope", "calculus", 1)
+    await card("chain-rule", "calculus", 5, { requires: ["slope"] })
+    await card("tcp-window", "networking", 3)
+    await card("future", "networking", -10)
+    await rt.vault.addAskedBefore("chain-rule", "What does the chain rule say?")
+    await setPhase(rt.store, SESSION, "review", {}, clock)
+  })
+
+  test("review_next: most overdue first, with foundations and asked-before stems", async () => {
+    const next = await call("review_next")
+    expect(next).toContain("ideaId: chain-rule")
+    expect(next).toContain("Card 1 (3 due")
+    expect(next).toContain("- `slope`: claim of slope")
+    expect(next).toContain("- What does the chain rule say?")
+    expect((await getSession(rt.store, SESSION))?.currentNode).toBe("chain-rule")
+  })
+
+  test("a review answer is graded, rescheduled and logged; a lapse pulls the foundation forward", async () => {
+    // slope is due 1 day ago; move it to the future so the pull is visible.
+    await rt.vault.setSrs("slope", { ...(await rt.vault.readIdea("slope"))!.srs!, due: new Date(clock.getTime() + 20 * day).toISOString() })
+    reply = () => ({ answer: "1", confidence: "90" })
+    const asked = await call("quiz", { question: "New wording?", options: ["a", "b"], answerKey: { explanation: "e", correctIndex: 0 }, type: "recall", ideaId: "chain-rule" })
+    expect(asked).toContain("mathesis_review_grade")
+    const graded = await call("review_grade", { questionID: lastQuestionID(asked) })
+    expect(graded).toContain("Rated again (a lapse)")
+    expect(graded).toContain("Its foundations are due now: `slope`")
+    expect(graded).toContain("mathesis_misconception_record")
+    const chain = (await rt.vault.readIdea("chain-rule"))!
+    expect(chain.srs?.lapses).toBe(1)
+    expect(chain.askedBefore).toContain("New wording?")
+    expect((await rt.vault.readIdea("slope"))?.srs?.due).toBe(clock.toISOString())
+    const log = (await readLog(rt.vault.logPath)).entries
+    expect(log.map((e) => `${e.ideaId}:${e.mode}`)).toEqual(["chain-rule:review", "slope:pull"])
+    expect((await getSession(rt.store, SESSION))?.done).toEqual(["chain-rule"])
+    expect(await call("review_grade", { questionID: lastQuestionID(asked) })).toContain("already used")
+  })
+
+  test("free recall needs the agent's verdict; the next card switches topic", async () => {
+    reply = () => ({ answer: "it composes derivatives", confidence: "60" })
+    const asked = await call("explain", { question: "Why?", answerKey: { correctAnswer: "x" }, type: "reverse", ideaId: "chain-rule" })
+    expect(await call("review_grade", { questionID: lastQuestionID(asked) })).toContain("`verdict` must be one of")
+    expect(await call("review_grade", { questionID: lastQuestionID(asked), verdict: "correct" })).toContain("Rated good")
+    // tcp-window (other topic) comes before slope (same topic as the last card), although slope is due too.
+    expect(await call("review_next")).toContain("ideaId: tcp-window")
+  })
+
+  test("questions need an existing card; the cap and an empty queue close the session", async () => {
+    expect(await call("quiz", { question: "q", options: ["a", "b"], answerKey: { explanation: "e", correctIndex: 0 }, type: "recall", ideaId: "nope" })).toContain("no card `nope`")
+    expect(await call("quiz", { question: "q", options: ["a", "b"], answerKey: { explanation: "e", correctIndex: 0 }, type: "check", ideaId: "slope" })).toContain("not used in the review phase")
+    rt.config.reviewCap = 1
+    await setPhase(rt.store, SESSION, "review", { done: ["slope"] }, clock)
+    expect(await call("review_next")).toContain("Session cap reached")
+    rt.config.reviewCap = 20
+    await setPhase(rt.store, SESSION, "review", { done: ["slope", "chain-rule", "tcp-window"] }, clock)
+    expect(await call("review_next")).toContain("All due cards are done (3 reviewed")
+  })
+
+  test("a topic filter limits the queue", async () => {
+    await setPhase(rt.store, SESSION, "review", { topic: "networking" }, clock)
+    expect(await call("review_next")).toContain("ideaId: tcp-window")
+  })
+
+  test("pickNext and suggestMode", () => {
+    const idea = (id: string, topic: string, extra = {}) => ({ id, topic, kind: "proposition" as const, requires: [], about: [], claim: "", why: "", misconceptions: "", askedBefore: [], ...extra })
+    const due = [idea("a", "t1"), idea("b", "t1"), idea("c", "t2")]
+    expect(pickNext(due, [], "t1")?.id).toBe("c")
+    expect(pickNext(due, ["c"], "t2")?.id).toBe("a")
+    expect(pickNext(due, ["a", "b", "c"])).toBeUndefined()
+    expect(suggestMode(idea("m", "t", { kind: "misconception" }))).toBe("discrimination")
+    expect(suggestMode(idea("n", "t", { srs: { reps: 1, lapses: 0 } }))).toBe("recall")
+  })
+
+  test("status lists due cards per topic and recent lapses", async () => {
+    const result = await status(rt)
+    expect(result.due).toBe(3)
+    expect(result.cards).toBe(4)
+    expect(result.text).toContain("calculus: 2 cards, 2 due")
+    expect(result.text).toContain("networking: 2 cards, 1 due")
   })
 })

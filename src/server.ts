@@ -5,11 +5,13 @@ import { resolveConfig } from "./config.ts"
 import { Mathesis, type SetupInput, type StartInput } from "./rpc.ts"
 import type { Runtime } from "./runtime.ts"
 import { AGENT_NAME, setup, startSession } from "./sessions.ts"
+import { status } from "./status.ts"
 import { getSession } from "./state.ts"
 import { Vault } from "./store/vault.ts"
 import { isDue } from "./srs/fsrs.ts"
 import { NAMESPACE, registerTools } from "./tools/define.ts"
 import { noteLearnerReply, questionTools } from "./tools/questions.ts"
+import { reviewTools } from "./tools/review.ts"
 import { teachTools } from "./tools/teach.ts"
 import { topicTools } from "./tools/topics.ts"
 import { topicIdeas } from "./runtime.ts"
@@ -87,6 +89,7 @@ export default Plugin.define({
           }),
         }
       },
+      status: async () => status(rt),
       setup: async (input) => setup(rt, (input ?? {}) as SetupInput),
     })
     emit = (name, data) => void registration.events.emit(name as never, data as never).catch(() => {})
@@ -123,7 +126,7 @@ export default Plugin.define({
       if (event.tool === "question" && event.status === "completed") await noteLearnerReply(rt, event.sessionID)
     })
 
-    await ctx.tool.transform((editor) => registerTools(editor, rt, [...topicTools, ...questionTools, ...teachTools]))
+    await ctx.tool.transform((editor) => registerTools(editor, rt, [...topicTools, ...questionTools, ...teachTools, ...reviewTools]))
 
     return () => {
       stop.abort()

@@ -92,6 +92,11 @@ export const Mathesis = Rpc.define({
         ["topics"],
       ),
     },
+    /** Due counts and a readable status summary (for /mathesis, the footer and the panel). */
+    status: {
+      input: obj({}),
+      output: obj({ due: { type: "number" }, cards: { type: "number" }, text: str }, ["due", "cards", "text"]),
+    },
     /** Writes the agent file and the vault folders; stores the model choice. */
     setup: {
       input: obj({
