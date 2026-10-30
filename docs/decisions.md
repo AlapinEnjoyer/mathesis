@@ -106,3 +106,17 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **A dismissed review question skips the card for the session** without changing its schedule; its wording counts as
   asked before.
 - **A misconception recorded without a session topic** takes the topic of the idea it corrupts.
+
+## Phase 4 (practice)
+
+- **A practice problem is a series of attempts**, each a form. "I don't know" or a wrong attempt is a request for a
+  hint, not a logged miss; the agent records the concluded problem once with `practice_record` (last attempt, highest
+  hint rung `none`/`R0`–`R5`, miss type). The log keeps `hints` and `miss`; ratings use the §5.3 table but are not
+  scheduled.
+- **Targets rank by current weakness** (time since the last review over stability), misconceptions first while not
+  stable, most-served foundations on ties, and cards practised in the last day at the back, so each session differs.
+  `practice_targets` shows the full card content, this session's outcomes per target and what to retest.
+- **The practice cap is `reviewCap`** (default 20 problems). After a problem the agent continues in the same turn; the
+  learner pauses by dismissing a form.
+- **The practice phase uses the four modes as question types** (`recall`, `discrimination`, `reverse`,
+  `composition`); misconception targets use `discrimination`.

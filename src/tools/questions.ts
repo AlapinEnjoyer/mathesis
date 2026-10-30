@@ -14,7 +14,7 @@ export const PHASE_TYPES: Record<Phase, readonly QuestionType[]> = {
   probe: ["probe"],
   teach: ["predict", "check"],
   review: ["recall", "discrimination", "reverse"],
-  practice: ["practice", "recall", "discrimination", "reverse", "composition"],
+  practice: ["recall", "discrimination", "reverse", "composition"],
 }
 const ALL_TYPES = [...new Set(Object.values(PHASE_TYPES).flat())]
 
@@ -241,12 +241,14 @@ function nextStep(question: OpenQuestion, record: AnswerRecord, phase: Phase | u
     default:
       return phase === "review"
         ? `Next: record the outcome with mathesis_review_grade (questionID ${question.questionID}).${misconception}`
-        : `Next: record the outcome with mathesis_practice_record (questionID ${question.questionID}).${misconception}`
+        : passed
+          ? `Next: if the problem is solved, record it once with mathesis_practice_record (questionID ${question.questionID}, the highest hint rung used).${misconception}`
+          : `Next: the problem is not finished. "I don't know" or a wrong attempt is a request for help: give the next hint rung only, then pose the next attempt on the same target (a new question). Record the problem with mathesis_practice_record when it is solved or the learner gives up.${misconception}`
   }
 }
 
 const common = {
-  type: schema.enum(ALL_TYPES, "The question's role: probe (probe phase); predict or check (teach); recall, discrimination or reverse (review); practice and the review types (practice)."),
+  type: schema.enum(ALL_TYPES, "The question's role: probe (probe phase); predict or check (teach); recall, discrimination or reverse (review); recall, discrimination, reverse or composition (practice)."),
   nodeId: schema.str("Teach phase: the plan node this question is about (required there)."),
   ideaId: schema.str("Review and practice: the card this question exercises (required there)."),
 }

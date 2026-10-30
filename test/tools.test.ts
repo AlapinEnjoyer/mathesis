@@ -471,28 +471,50 @@ describe("practice", () => {
     await setPhase(rt.store, SESSION, "practice", {}, clock)
   })
 
-  test("targets: held cards only, weakest first", async () => {
+  test("targets: held cards only, weakest now first (overdue beats low stability), recent ones last", async () => {
     const { ideas } = await rt.vault.listIdeas()
-    expect(rankTargets(ideas).map((i) => i.id)).toEqual(["chain-rule", "product-rule", "slope"])
-    const result = await call("practice_targets")
-    expect(result).toContain("3 targets")
-    expect(result.indexOf("`chain-rule`")).toBeLessThan(result.indexOf("`slope`"))
-    expect(result).not.toContain("never-reviewed")
+    expect(rankTargets(ideas, clock).map((i) => i.id)).toEqual(["slope", "chain-rule", "product-rule"])
+    expect(rankTargets(ideas, clock, new Set(["slope"])).map((i) => i.id)).toEqual(["chain-rule", "product-rule", "slope"])
+    const result = await call("practice_targets", { count: -5 })
+    expect(result).toContain("0 of 20 problems done")
+    expect(result).toContain("## `slope`")
+    expect(result).not.toContain("## `chain-rule`") // count clamped to 1
+    expect(await call("practice_targets")).not.toContain("never-reviewed")
   })
 
-  test("outcomes are logged but do not change the schedule; two misses advise a switch", async () => {
+  test("a problem is a series of attempts: only the concluded problem is recorded", async () => {
     const before = (await rt.vault.readIdea("chain-rule"))!.srs
-    reply = () => ({ answer: "1", confidence: "60" })
     const ask = () => call("quiz", { question: `Problem ${Math.random()}`, options: ["a", "b"], answerKey: { explanation: "e", correctIndex: 0 }, type: "composition", ideaId: "chain-rule" })
+    reply = () => ({ answer: "idk" })
+    expect(await ask()).toContain("request for help: give the next hint rung")
+    reply = () => ({ answer: "0", confidence: "60" })
+    const solved = lastQuestionID(await ask())
+    expect(await call("practice_record", { questionID: solved, hints: "R7" })).toContain("must be one of")
+    const recorded = await call("practice_record", { questionID: solved, hints: "R2" })
+    expect(recorded).toContain("solved, hint R2")
+    expect(recorded).toContain("hold the difficulty")
+    expect((await rt.vault.readIdea("chain-rule"))!.srs).toEqual(before)
+    const log = (await readLog(rt.vault.logPath)).entries
+    expect(log).toMatchObject([{ mode: "practice", scheduled: false, hints: "R2", ideaId: "chain-rule" }])
+    expect(await call("practice_targets")).toContain("This session: composition solved (hint R2)")
+  })
+
+  test("two concluded misses on a target advise a switch; misses are listed for retest", async () => {
+    reply = () => ({ answer: "1", confidence: "60" })
+    const ask = () => call("quiz", { question: `Problem ${Math.random()}`, options: ["a", "b"], answerKey: { explanation: "e", correctIndex: 0 }, type: "recall", ideaId: "product-rule" })
     const first = await call("practice_record", { questionID: lastQuestionID(await ask()), miss: "discrimination" })
     expect(first).toContain("missed, discrimination miss")
     expect(first).toContain("one notch easier")
-    const second = await call("practice_record", { questionID: lastQuestionID(await ask()) })
-    expect(second).toContain("Second miss on this target")
-    expect((await rt.vault.readIdea("chain-rule"))!.srs).toEqual(before)
-    const log = (await readLog(rt.vault.logPath)).entries
-    expect(log.every((e) => e.mode === "practice" && !e.scheduled)).toBe(true)
-    expect((await getSession(rt.store, SESSION))?.done).toEqual(["chain-rule", "chain-rule"])
+    expect(await call("practice_record", { questionID: lastQuestionID(await ask()) })).toContain("Two concluded problems")
+    expect(await call("practice_targets")).toContain("To retest before closing (fresh situation): product-rule")
+    expect((await getSession(rt.store, SESSION))?.done).toEqual(["product-rule", "product-rule"])
+  })
+
+  test("a deleted card is refused before its answer is used", async () => {
+    reply = () => ({ answer: "0", confidence: "60" })
+    const id = lastQuestionID(await call("quiz", { question: "q", options: ["a", "b"], answerKey: { explanation: "e", correctIndex: 0 }, type: "recall", ideaId: "slope" }))
+    await rm(join(root, "ideas", "slope.md"))
+    expect(await call("practice_record", { questionID: id })).toContain("no longer exists")
   })
 
   test("review tools are refused in practice, practice tools outside it", async () => {
