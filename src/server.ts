@@ -1,8 +1,10 @@
 import { Plugin } from "@opencode/plugin"
+import { setupSpike } from "./spike/server.ts"
 
 export default Plugin.define({
   id: "mathesis",
   async setup(ctx) {
+    if (process.env.MATHESIS_SPIKE === "1") await setupSpike(ctx)
     await ctx.tool.transform((editor) => {
       editor.namespace({ name: "mathesis", description: "Mathesis learning tools" })
       editor.add({
