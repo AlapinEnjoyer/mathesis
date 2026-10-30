@@ -20,11 +20,13 @@ export function configDir() {
 
 export const agentFilePath = () => join(configDir(), "agents", `${AGENT_NAME}.md`)
 
-/** Mathesis may edit only the vault; it never runs shell commands. Applied to the agent and to every session it starts. */
-export function permissions(vault: string) {
+/**
+ * Mathesis edits no files with file tools (its own tools write the vault) and runs no shell commands. Applied to the
+ * agent and to every session it starts. Reading the learner's files stays allowed.
+ */
+export function permissions(_vault: string) {
   return [
     { action: "edit", resource: "*", effect: "deny" as const },
-    { action: "edit", resource: `${vault}/**`, effect: "allow" as const },
     { action: "shell", resource: "*", effect: "deny" as const },
   ]
 }

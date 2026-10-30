@@ -20,6 +20,8 @@ export type OpenQuestion = {
   askedAt: string
   /** No form could be shown; the agent asks another way and records the reply with mathesis_answer_record. */
   fallback?: boolean
+  /** Set when the learner wrote a message or answered the built-in question tool after the fallback. */
+  learnerReplied?: boolean
 }
 
 /** A question the learner answered in this session. Tools that grade or create cards check against these. */
@@ -41,6 +43,10 @@ export type AnswerRecord = {
   elapsedMs?: number
   /** The tool call that already used this answer (a card, a review), so it cannot count twice. */
   usedBy?: string
+  /** Misconception cards already recorded from this answer. */
+  misconceptions?: string[]
+  /** Recorded with mathesis_answer_record after a fallback, not through a form. */
+  fallback?: boolean
 }
 
 export const ANSWERS_KEPT = 30
@@ -92,6 +98,23 @@ export function updateSession(
     const current = await getSession(store, sessionID)
     if (!current) throw new Error("This session has no Mathesis phase yet")
     return write(store, sessionID, { ...current, ...patch }, now)
+  })
+}
+
+/**
+ * Reads, checks and writes one session's state as a single step under the session lock, so parallel tool calls
+ * cannot both pass a check (one open question, one use per answer). `fn` may throw to refuse; nothing is written then.
+ */
+export function mutateSession(
+  store: KeyValue,
+  sessionID: string,
+  fn: (state: SessionState) => Omit<Patch, "phase" | "updatedAt">,
+  now = new Date(),
+): Promise<SessionState> {
+  return withSessionLock(sessionID, async () => {
+    const current = await getSession(store, sessionID)
+    if (!current) throw new Error("This session has no Mathesis phase yet")
+    return write(store, sessionID, { ...current, ...fn(current) }, now)
   })
 }
 

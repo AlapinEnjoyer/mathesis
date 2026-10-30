@@ -4,12 +4,12 @@ import { promptCache } from "./compose.ts"
 import { resolveConfig } from "./config.ts"
 import { Mathesis, type SetupInput, type StartInput } from "./rpc.ts"
 import type { Runtime } from "./runtime.ts"
-import { setup, startSession } from "./sessions.ts"
+import { AGENT_NAME, setup, startSession } from "./sessions.ts"
 import { getSession } from "./state.ts"
 import { Vault } from "./store/vault.ts"
 import { isDue } from "./srs/fsrs.ts"
-import { registerTools } from "./tools/define.ts"
-import { questionTools } from "./tools/questions.ts"
+import { NAMESPACE, registerTools } from "./tools/define.ts"
+import { noteLearnerReply, questionTools } from "./tools/questions.ts"
 import { teachTools } from "./tools/teach.ts"
 import { topicTools } from "./tools/topics.ts"
 import { topicIdeas } from "./runtime.ts"
@@ -30,7 +30,7 @@ export default Plugin.define({
         asked: (data) => emit("questionAsked", data),
         closed: (data) => emit("questionClosed", data),
       },
-      { claimTimeoutMs: Number(ctx.options.claimTimeoutMs) > 0 ? Number(ctx.options.claimTimeoutMs) : 4000 },
+      { claimTimeoutMs: Number(ctx.options.claimTimeoutMs) > 0 ? Number(ctx.options.claimTimeoutMs) : 4000, showTimeoutMs: 15_000 },
     )
 
     const rt: Runtime = {
@@ -55,6 +55,7 @@ export default Plugin.define({
         const { questionID } = input as { questionID: string }
         return broker.claim(questionID) as never
       },
+      shown: async (input) => ({ accepted: broker.shown((input as { formID: string }).formID) }),
       relay: async (input) => {
         const { formID, answer, cancelled, message } = input as {
           formID: string
@@ -106,13 +107,27 @@ export default Plugin.define({
     })()
 
     // The phase prompt: fixed per phase, so the cached prompt prefix changes at most once per session (handoff §2c).
+    // Sessions that are not Mathesis sessions (another agent, no Mathesis state) do not see the Mathesis tools; this
+    // depends only on the session, so the tool list stays the same within it.
     await ctx.session.hook("context", async (event) => {
       const state = await getSession(rt.store, event.sessionID)
       if (state) event.system.push({ type: "text", text: rt.prompt(state.phase) })
+      else if (event.agent !== AGENT_NAME) {
+        for (const name of Object.keys(event.tools)) if (name.startsWith(`${NAMESPACE}_`)) delete event.tools[name]
+      }
+    })
+
+    // After a fallback, a reply from the learner (a message, or the built-in question form) unlocks answer_record.
+    await ctx.session.hook("prompt", (event) => noteLearnerReply(rt, event.sessionID))
+    await ctx.tool.hook("execute.after", async (event) => {
+      if (event.tool === "question" && event.status === "completed") await noteLearnerReply(rt, event.sessionID)
     })
 
     await ctx.tool.transform((editor) => registerTools(editor, rt, [...topicTools, ...questionTools, ...teachTools]))
 
-    return () => stop.abort()
+    return () => {
+      stop.abort()
+      broker.abortAll()
+    }
   },
 })

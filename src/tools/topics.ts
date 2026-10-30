@@ -1,18 +1,29 @@
-import { PHASES, type Phase } from "../phases.ts"
+import type { Phase } from "../phases.ts"
+
+const LEARN_PHASES = ["probe", "teach"] as const
 import { renderPlanTree, type NodeMark } from "../plan.ts"
 import { dueLabel, ideaState, Refusal, topicIdeas, topicPlan, type Runtime } from "../runtime.ts"
 import { isDue } from "../srs/fsrs.ts"
-import { setPhase, type SessionState } from "../state.ts"
+import { setPhase, updateSession, type SessionState } from "../state.ts"
 import { isSlug, slugify, type Idea } from "../store/vault.ts"
 import { oneOf, schema, text, type ToolSpec } from "./define.ts"
 
 const firstLine = (value: string) => value.split("\n").find((line) => line.trim())?.trim() ?? ""
 const OTHER_CARDS_SHOWN = 40
 
-export function refuseWhileOpen(state: SessionState | undefined) {
-  if (state?.openQuestion && !state.openQuestion.fallback) {
-    throw new Refusal(`a question is still open (${state.openQuestion.questionID}). Wait for the learner's answer first.`)
+/**
+ * Refuses while a question is really waiting for the learner. A question the broker no longer knows (the server
+ * restarted while it was open) does not lock the session: it becomes a fallback question, so a reply the learner
+ * gives in the chat can still be recorded with mathesis_answer_record.
+ */
+export async function refuseWhileOpen(rt: Runtime, call: { sessionID: string; state: SessionState | undefined }) {
+  const open = call.state?.openQuestion
+  if (!open || open.fallback) return
+  if (rt.broker.isOpen(open.questionID)) {
+    throw new Refusal(`a question is still open (${open.questionID}). Wait for the learner's answer first.`)
   }
+  await updateSession(rt.store, call.sessionID, { openQuestion: { ...open, fallback: true } }, rt.now())
+  call.state = { ...call.state!, openQuestion: { ...open, fallback: true } }
 }
 
 export async function statusText(rt: Runtime, state: SessionState | undefined, topicId?: string): Promise<string> {
@@ -20,6 +31,7 @@ export async function statusText(rt: Runtime, state: SessionState | undefined, t
   const id = topicId ?? state?.topic
   const { ideas, errors } = await rt.vault.listIdeas()
   const lines: string[] = []
+  if (id && !isSlug(id)) throw new Refusal(`"${id}" is not a topic id. Use mathesis_topic_list to see the ids.`)
   const topic = id ? await rt.vault.readTopic(id) : undefined
   if (id && !topic) throw new Refusal(`there is no topic "${id}". Use mathesis_topic_list or mathesis_topic_start.`)
   let own: Idea[] = []
@@ -77,7 +89,7 @@ export const topicTools: ToolSpec[] = [
       ["goal"],
     ),
     async run(input, call, rt) {
-      refuseWhileOpen(call.state)
+      await refuseWhileOpen(rt, call)
       const goal = text(input, "goal", { max: 300 })!
       const requested = text(input, "topic", { optional: true })
       if (call.state?.topic && !requested) {
@@ -127,12 +139,12 @@ export const topicTools: ToolSpec[] = [
   {
     name: "phase_set",
     description:
-      "Change this session's phase. Normally not needed: mathesis_probe_done moves probe → teach by itself. Use it to go back from teach to probe (re-probe a topic) or to set the first phase of a session.",
-    input: schema.object({ phase: schema.enum(PHASES, "The new phase.") }, ["phase"]),
+      "Change a learn session's phase. Normally not needed: mathesis_probe_done moves probe → teach by itself. Use it to go back from teach to probe (re-probe the topic). Review and practice sessions are started by the learner with /recall and /practice.",
+    input: schema.object({ phase: schema.enum(LEARN_PHASES, "The new phase.") }, ["phase"]),
     async run(input, call, rt) {
-      refuseWhileOpen(call.state)
-      const phase = oneOf(input, "phase", PHASES)
-      if ((phase === "probe" || phase === "teach") && !call.state?.topic) {
+      await refuseWhileOpen(rt, call)
+      const phase = oneOf(input, "phase", LEARN_PHASES)
+      if (!call.state?.topic) {
         throw new Refusal("the session has no topic yet. Call mathesis_topic_start first.")
       }
       try {

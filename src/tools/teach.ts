@@ -1,7 +1,7 @@
 import { parsePlan, planToMermaid, renderPlanTree, storePlan } from "../plan.ts"
 import { Refusal, dueLabel, sessionKind, type Runtime } from "../runtime.ts"
 import { rate, review, type Grade } from "../srs/fsrs.ts"
-import { getSession, setPhase, updateSession, type AnswerRecord, type SessionState } from "../state.ts"
+import { mutateSession, setPhase, updateSession, type AnswerRecord, type SessionState } from "../state.ts"
 import { appendLog } from "../store/log.ts"
 import { isSlug, slugify, today } from "../store/vault.ts"
 import { oneOf, schema, text, textList, type ToolSpec } from "./define.ts"
@@ -19,12 +19,42 @@ function slugs(input: Record<string, unknown>, key: string, exclude?: string): s
   return [...new Set(values)].filter((value) => value !== exclude)
 }
 
-/** Marks an answer as used by a tool call, so one answer cannot create two cards or two reviews. */
-export async function markUsed(rt: Runtime, sessionID: string, questionID: string, usedBy: string) {
-  const state = await getSession(rt.store, sessionID)
-  if (!state?.answers) return
-  const answers = state.answers.map((a) => (a.questionID === questionID ? { ...a, usedBy } : a))
-  await updateSession(rt.store, sessionID, { answers }, rt.now())
+/**
+ * Claims an answer for one tool call in a single locked step: the answer must exist in this session, be unused and
+ * pass `check`. Parallel calls with the same questionID cannot both succeed. Call `release` if the work then fails.
+ */
+export async function useAnswer(
+  rt: Runtime,
+  sessionID: string,
+  questionID: string | undefined,
+  usedBy: (record: AnswerRecord) => string,
+  check: (record: AnswerRecord) => void = () => {},
+): Promise<{ record: AnswerRecord; release: () => Promise<void> }> {
+  let claimed: AnswerRecord | undefined
+  let tag = ""
+  await mutateSession(
+    rt.store,
+    sessionID,
+    (current) => {
+      const record = findAnswer(current, questionID)
+      check(record)
+      tag = usedBy(record)
+      claimed = record
+      return { answers: current.answers!.map((a) => (a.questionID === record.questionID ? { ...a, usedBy: tag } : a)) }
+    },
+    rt.now(),
+  )
+  const release = async () => {
+    await mutateSession(
+      rt.store,
+      sessionID,
+      (current) => ({
+        answers: (current.answers ?? []).map((a) => (a.questionID === claimed!.questionID && a.usedBy === tag ? { ...a, usedBy: undefined } : a)),
+      }),
+      rt.now(),
+    ).catch(() => {})
+  }
+  return { record: claimed!, release }
 }
 
 export function findAnswer(state: SessionState | undefined, questionID: string | undefined): AnswerRecord {
@@ -61,7 +91,7 @@ export const teachTools: ToolSpec[] = [
       ["summary", "strands"],
     ),
     async run(input, call, rt) {
-      refuseWhileOpen(call.state)
+      await refuseWhileOpen(rt, call)
       const topic = requireTopic(call.state)
       const summary = text(input, "summary", { max: 4000 })!
       if (!Array.isArray(input.strands) || input.strands.length === 0) throw new Refusal("give at least one strand.")
@@ -80,7 +110,7 @@ export const teachTools: ToolSpec[] = [
       await setPhase(rt.store, call.sessionID, "teach", {}, now)
       return [
         "Assessment saved in the topic note. The session is now in the teach phase.",
-        "Next: plan (see the planning doctrine), then present the approach in prose and the map with mathesis_plan_set, and ask the learner to confirm. Do not teach in that turn.",
+        "Next, without waiting: plan (see the planning doctrine), present the approach in prose and the map with mathesis_plan_set, and ask the learner to confirm. Teach nothing before they confirm.",
       ].join("\n")
     },
   },
@@ -99,7 +129,7 @@ export const teachTools: ToolSpec[] = [
         topic,
         {
           fields: { plan: storePlan(plan) },
-          sections: { Plan: ["```mermaid", planToMermaid(plan), "```", "", "Foundations first:", "", tree].join("\n") },
+          sections: { Plan: ["```mermaid", planToMermaid(plan), "```", "", "Foundations first:", "", renderPlanTree(plan, undefined, { list: true })].join("\n") },
         },
         rt.now(),
       )
@@ -113,7 +143,7 @@ export const teachTools: ToolSpec[] = [
   {
     name: "idea_upsert",
     description:
-      "Create (or update) the card for an idea the learner just demonstrated with a passed check. Only call it after a `check` question whose answer was correct (multiple choice) or that you graded correct or partial (free recall). The check counts as the card's first review; the tool schedules the next one.",
+      "Create the card for an idea the learner just demonstrated with a passed check (or record another review of the node's existing card). Only call it after a `check` question whose answer was correct (multiple choice) or that you graded correct or partial (free recall). The check counts as a review; the tool schedules the next one. An existing card keeps its text (the learner may have edited it).",
     input: schema.object(
       {
         questionID: schema.str("The passed check's questionID."),
@@ -123,60 +153,87 @@ export const teachTools: ToolSpec[] = [
         requires: schema.list("Ids of the cards this idea builds on."),
         kind: schema.enum(["proposition", "chain"], "proposition (one fact) or chain (a reasoning chain). Default proposition."),
         verdict: schema.enum(["correct", "partial"], "Free-recall checks: your strict grading of the answer. Required for them."),
+        cleanReasoning: { type: "boolean", description: "false when the answer was right but the thinking showed a confused model (caps the rating at Good)." },
       },
       ["questionID", "claim", "why"],
     ),
     async run(input, call, rt) {
       const topic = requireTopic(call.state)
-      const record = findAnswer(call.state, text(input, "questionID"))
-      if (record.type !== "check") throw new Refusal(`only a passed \`check\` creates a card; \`${record.questionID}\` was a ${record.type}.`)
-      if (record.status !== "answered") throw new Refusal("the learner did not know the answer; repair the step and check again.")
+      const claim = text(input, "claim", { max: 2000 })!
+      const why = text(input, "why", { max: 6000 })!
+      const kind = oneOf(input, "kind", ["proposition", "chain"] as const, "proposition")
+      const requested = text(input, "id", { optional: true })
+      if (requested && !isSlug(requested)) throw new Refusal("`id` must be a lowercase slug (a-z, 0-9, single hyphens).")
       let correct: true | "partial" = true
-      if (record.kind === "quiz") {
-        if (record.correct !== true) throw new Refusal("that check was answered wrong; repair the step and check again.")
-      } else {
-        const verdict = oneOf(input, "verdict", ["correct", "partial"] as const)
-        correct = verdict === "partial" ? "partial" : true
-      }
-      const id = text(input, "id", { optional: true }) ?? record.nodeId
-      if (!id || !isSlug(id)) throw new Refusal("give a card `id` (lowercase slug), or ask checks with a nodeId.")
-      const now = rt.now()
-      const { grade } = rate({ correct, confidence: record.confidence })
-      const existing = await rt.vault.readIdea(id)
-      const srs = review(existing?.srs, grade, now)
-      const source = `sessions/${today(now)}-${topic}-${sessionKind("teach")}.md`
-      const { created } = await rt.vault.upsertIdea(
-        {
-          id,
-          topic,
-          kind: oneOf(input, "kind", ["proposition", "chain"] as const, "proposition"),
-          requires: slugs(input, "requires", id),
-          claim: text(input, "claim", { max: 2000 })!,
-          why: text(input, "why", { max: 6000 })!,
-          source,
-          srs,
+      let id = ""
+      const { record, release } = await useAnswer(
+        rt,
+        call.sessionID,
+        text(input, "questionID"),
+        (record) => `idea_upsert:${requested ?? record.nodeId}`,
+        (record) => {
+          if (record.type !== "check") throw new Refusal(`only a passed \`check\` creates a card; \`${record.questionID}\` was a ${record.type}.`)
+          if (record.status !== "answered") throw new Refusal("the learner did not know the answer; repair the step and check again.")
+          if (record.kind === "quiz") {
+            if (record.correct !== true) throw new Refusal("that check was answered wrong; repair the step and check again.")
+          } else correct = oneOf(input, "verdict", ["correct", "partial"] as const) === "partial" ? "partial" : true
+          id = requested ?? record.nodeId ?? ""
+          if (!id) throw new Refusal("give a card `id` (lowercase slug), or ask checks with a nodeId.")
         },
-        now,
       )
-      await rt.vault.addAskedBefore(id, record.prompt)
-      await appendLog(rt.vault.logPath, {
-        ts: now.toISOString(),
-        ideaId: id,
-        sessionID: call.sessionID,
-        mode: "teach",
-        scheduled: true,
-        type: "check",
-        questionStem: record.prompt,
-        correct,
-        ...(record.confidence !== undefined ? { confidence: record.confidence } : {}),
-        rating: grade,
-        ...(record.elapsedMs !== undefined ? { elapsedMs: record.elapsedMs } : {}),
-      })
-      await rt.vault.updateTopic(topic, { addIdeas: [id] }, now)
-      await markUsed(rt, call.sessionID, record.questionID, `idea_upsert:${id}`)
-      rt.events.cardsChanged({ sessionID: call.sessionID, added: created ? [id] : [], updated: created ? [] : [id] })
-      const idea = (await rt.vault.readIdea(id))!
-      return `${created ? "Card created" : "Card updated"}: \`${id}\` (rated ${grade}; ${dueLabel(idea, now)}). Continue with the next step.`
+      try {
+        return await createCard()
+      } catch (error) {
+        await release()
+        throw error
+      }
+
+      async function createCard() {
+        const existing = await rt.vault.readIdea(id)
+        // A check proves its own node, or a new finer idea; it cannot review an unrelated existing card.
+        if (existing && id !== record.nodeId) {
+          throw new Refusal(`\`${id}\` is an existing card that this check (about \`${record.nodeId}\`) does not test. Use the node's id or a new id.`)
+        }
+        if (existing?.kind === "misconception") throw new Refusal(`\`${id}\` is a misconception card; choose another id.`)
+        if (existing?.topic && existing.topic !== topic) {
+          throw new Refusal(`\`${id}\` belongs to the topic \`${existing.topic}\`; use a new id for this topic's idea.`)
+        }
+        const now = rt.now()
+        const { grade } = rate({ correct, confidence: record.confidence, ...(input.cleanReasoning === false ? { cleanReasoning: false } : {}) })
+        const srs = review(existing?.srs, grade, now)
+        const source = `sessions/${today(now)}-${topic}-${sessionKind("teach")}.md`
+        const { created } = await rt.vault.upsertIdea(
+          {
+            id,
+            topic,
+            kind,
+            requires: slugs(input, "requires", id),
+            claim,
+            why,
+            source,
+            srs,
+          },
+          now,
+        )
+        await rt.vault.addAskedBefore(id, record.prompt)
+        await appendLog(rt.vault.logPath, {
+          ts: now.toISOString(),
+          ideaId: id,
+          sessionID: call.sessionID,
+          mode: "teach",
+          scheduled: true,
+          type: "check",
+          questionStem: record.prompt,
+          correct,
+          ...(record.confidence !== undefined ? { confidence: record.confidence } : {}),
+          rating: grade,
+          ...(record.elapsedMs !== undefined ? { elapsedMs: record.elapsedMs } : {}),
+        })
+        await rt.vault.updateTopic(topic, { addIdeas: [id] }, now)
+        rt.events.cardsChanged({ sessionID: call.sessionID, added: created ? [id] : [], updated: created ? [] : [id] })
+        const idea = (await rt.vault.readIdea(id))!
+        return `${created ? "Card created" : "Card reviewed again"}: \`${id}\` (rated ${grade}; ${dueLabel(idea, now)}). Continue with the next step.`
+      }
     },
   },
   {
@@ -201,7 +258,23 @@ export const teachTools: ToolSpec[] = [
       if (!isSlug(id)) throw new Refusal("`id` must be a lowercase slug.")
       const about = slugs(input, "about", id)
       const questionID = text(input, "questionID", { optional: true })
-      const record = questionID ? state.answers?.find((a) => a.questionID === questionID) : undefined
+      let record: AnswerRecord | undefined
+      if (questionID) {
+        // Evidence, when named, must be real: an answer of this session that was not right, used once per card.
+        await mutateSession(
+          rt.store,
+          call.sessionID,
+          (current) => {
+            const found = current.answers?.find((a) => a.questionID === questionID)
+            if (!found) throw new Refusal(`no answered question \`${questionID}\` in this session.`)
+            if (found.correct === true) throw new Refusal("that answer was correct; a misconception needs a wrong answer or wrong thinking as evidence.")
+            if (found.misconceptions?.includes(id)) throw new Refusal(`\`${id}\` was already recorded from this answer.`)
+            record = found
+            return { answers: current.answers!.map((a) => (a.questionID === questionID ? { ...a, misconceptions: [...(a.misconceptions ?? []), id] } : a)) }
+          },
+          rt.now(),
+        )
+      }
       const now = rt.now()
       const grade: Grade = "again"
       const existing = await rt.vault.readIdea(id)

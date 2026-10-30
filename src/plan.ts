@@ -159,7 +159,7 @@ export type NodeMark = "held" | "due" | "current" | "none"
  * The plan as an indented list, foundations first: each node is indented by its depth and lists what it needs.
  * Used in the topic note, in tool results and in the TUI panel (mermaid does not render in a terminal).
  */
-export function renderPlanTree(plan: Plan, marks: (id: string) => NodeMark = () => "none"): string {
+export function renderPlanTree(plan: Plan, marks: (id: string) => NodeMark = () => "none", options: { list?: boolean } = {}): string {
   const depth = depths(plan)
   const requires = new Map<string, string[]>()
   for (const { from, to } of plan.edges) requires.set(to, [...(requires.get(to) ?? []), from])
@@ -171,7 +171,9 @@ export function renderPlanTree(plan: Plan, marks: (id: string) => NodeMark = () 
     .map(({ node }) => {
       const needs = requires.get(node.id)
       const suffix = needs?.length ? `  (needs ${needs.join(", ")})` : ""
-      return `${"  ".repeat(depth.get(node.id)!)}${symbol[marks(node.id)]} ${node.title} \`${node.id}\`${suffix}`
+      // As a Markdown list (topic note), deep indentation stays a nested list instead of becoming a code block.
+      const lead = options.list ? `${"  ".repeat(depth.get(node.id)!)}- ` : "  ".repeat(depth.get(node.id)!)
+      return `${lead}${symbol[marks(node.id)]} ${node.title} \`${node.id}\`${suffix}`
     })
     .join("\n")
 }

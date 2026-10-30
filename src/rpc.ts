@@ -30,6 +30,11 @@ export const Mathesis = Rpc.define({
       input: obj({ questionID: str }, ["questionID"]),
       output: obj({ accepted: bool, sessionID: str, form: formSpec }, ["accepted"]),
     },
+    /** The claimer created the form and it is on screen; without this the question falls back after a while. */
+    shown: {
+      input: obj({ formID: str }, ["formID"]),
+      output: obj({ accepted: bool }, ["accepted"]),
+    },
     /** Relays a form outcome seen by the TUI (for example after a restart). The first outcome wins. */
     relay: {
       input: obj({ formID: str, answer: { type: "object" }, cancelled: bool, message: str }, ["formID"]),

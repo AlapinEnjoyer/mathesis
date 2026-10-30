@@ -13,7 +13,7 @@ When a `check` comes back correct (or partly correct on free recall), call `math
 - `requires`: the ids of the cards it builds on (foundations the learner holds).
 - For free recall, `verdict`: `correct` or `partial`, your strict grading of the answer.
 
-The passing check counts as the card's first review: the tool schedules it from the learner's confidence and verdict. Upserting an existing card updates it and records another review.
+The passing check counts as the card's first review: the tool schedules it from the learner's confidence and verdict. Calling it again for a node that already has a card records another review; the card's Claim and Why stay as they are (the learner may have edited them). If the thinking showed a confused model behind a right answer, pass `cleanReasoning: false`.
 
 A failed check creates no card: repair the step, check again, and upsert after the check that passes.
 

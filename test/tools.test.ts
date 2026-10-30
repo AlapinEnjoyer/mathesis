@@ -9,7 +9,7 @@ import { getSession, memoryStore } from "../src/state.ts"
 import { readLog } from "../src/store/log.ts"
 import { Vault } from "../src/store/vault.ts"
 import { runTool, type ToolSpec } from "../src/tools/define.ts"
-import { questionTools } from "../src/tools/questions.ts"
+import { noteLearnerReply, questionTools } from "../src/tools/questions.ts"
 import { teachTools } from "../src/tools/teach.ts"
 import { topicTools } from "../src/tools/topics.ts"
 
@@ -182,6 +182,9 @@ describe("fallback without a TUI", () => {
     const id = lastQuestionID(result)
     expect((await getSession(rt.store, SESSION))?.openQuestion?.fallback).toBe(true)
     expect(await call("answer_record", { questionID: "other", choiceIndex: 0 })).toStartWith("Refused:")
+    // The model cannot answer for the learner: a reply must have arrived first.
+    expect(await call("answer_record", { questionID: id, choiceIndex: 0 })).toContain("has not replied yet")
+    await noteLearnerReply(rt, SESSION)
     expect(await call("answer_record", { questionID: id, choiceIndex: 9 })).toContain("choiceIndex must be 0–2")
     const recorded = await call("answer_record", { questionID: id, choiceIndex: 0, confidence: 60 })
     expect(recorded).toContain("Verdict: CORRECT")
@@ -224,5 +227,85 @@ describe("status and lists", () => {
   test("tools that need a topic refuse in a session without one", async () => {
     expect(await call("quiz", quiz())).toContain("needs an active Mathesis topic")
     expect(await call("topic_status")).toBe("The vault is empty: no topics and no cards yet.")
+  })
+})
+
+describe("phase 2 review fixes", () => {
+  test("a question the broker forgot (server restart) does not lock the session", async () => {
+    await toTeach()
+    const state = (await getSession(rt.store, SESSION))!
+    await rt.store.set(`session/${SESSION}`, { ...state, openQuestion: { questionID: "lost", kind: "quiz", type: "check", prompt: "p", options: ["a", "b"], correctIndex: 0, explanation: "e", nodeId: "interval", askedAt: clock.toISOString() } })
+    reply = () => ({ answer: "0", confidence: "70" })
+    expect(await call("quiz", quiz())).toContain("Verdict: CORRECT")
+  })
+
+  test("one answer cannot create two cards, even in parallel", async () => {
+    await toTeach()
+    reply = () => ({ answer: "0", confidence: "90" })
+    const id = lastQuestionID(await call("quiz", quiz()))
+    const results = await Promise.all([
+      call("idea_upsert", { questionID: id, claim: "c", why: "w" }),
+      call("idea_upsert", { questionID: id, id: "other-card", claim: "c", why: "w" }),
+    ])
+    expect(results.filter((r) => r.startsWith("Card created")).length).toBe(1)
+    expect(results.some((r) => r.includes("already used"))).toBe(true)
+    expect((await readLog(rt.vault.logPath)).entries.length).toBe(1)
+  })
+
+  test("a failed card write releases the answer for a retry", async () => {
+    await toTeach()
+    reply = () => ({ answer: "0", confidence: "90" })
+    const id = lastQuestionID(await call("quiz", quiz()))
+    await rt.vault.upsertIdea({ id: "foreign", topic: "other-topic", claim: "x" }, clock)
+    expect(await call("idea_upsert", { questionID: id, id: "foreign", claim: "c", why: "w" })).toContain("does not test")
+    expect(await call("idea_upsert", { questionID: id, claim: "c", why: "w" })).toContain("Card created")
+  })
+
+  test("a check cannot review a misconception card or a card of another topic", async () => {
+    await toTeach()
+    await rt.vault.upsertIdea({ id: "interval", topic: "other-topic", claim: "x" }, clock)
+    reply = () => ({ answer: "0", confidence: "90" })
+    expect(await call("idea_upsert", { questionID: lastQuestionID(await call("quiz", quiz())), claim: "c", why: "w" })).toContain("belongs to the topic `other-topic`")
+  })
+
+  test("misconception evidence must be real, wrong and used once", async () => {
+    await toTeach()
+    const input = { wrongModel: "w", rightModel: "r" }
+    expect(await call("misconception_record", { ...input, questionID: "nope" })).toContain("no answered question")
+    reply = () => ({ answer: "0", confidence: "90" })
+    expect(await call("misconception_record", { ...input, questionID: lastQuestionID(await call("quiz", quiz())) })).toContain("was correct")
+    reply = () => ({ answer: "1", confidence: "90" })
+    const wrong = lastQuestionID(await call("quiz", quiz()))
+    expect(await call("misconception_record", { ...input, questionID: wrong })).toContain("created")
+    expect(await call("misconception_record", { ...input, questionID: wrong })).toContain("already recorded from this answer")
+  })
+
+  test("two parallel questions: the second is refused", async () => {
+    await toTeach()
+    reply = undefined
+    const results = await Promise.all([call("quiz", quiz()), call("quiz", quiz())])
+    expect(results.filter((r) => r.includes("a question is still open")).length).toBe(1)
+  })
+
+  test("blank options are refused, not dropped", async () => {
+    await toTeach()
+    expect(await call("quiz", quiz({ options: ["A", " ", "B"], answerKey: { explanation: "e", correctIndex: 2 } }))).toContain("non-empty strings")
+  })
+
+  test("phase_set only moves between probe and teach; topic_status refuses a non-id", async () => {
+    await toTeach()
+    expect(await call("phase_set", { phase: "review" })).toContain("must be one of: probe, teach")
+    expect(await call("phase_set", { phase: "probe" })).toBe("Phase is now probe.")
+    expect(await call("topic_status", { topic: "Binary Search" })).toContain("is not a topic id")
+  })
+
+  test("answer_record clamps the confidence and the note marks a fallback answer", async () => {
+    await toTeach()
+    const id = lastQuestionID(await call("quiz", quiz({ question: "## Not a heading" })))
+    await noteLearnerReply(rt, SESSION)
+    expect(await call("answer_record", { questionID: id, choiceIndex: 0, confidence: 250 })).toContain("Confidence: 100%")
+    const note = await readFile(join(root, "sessions", `${clock.toISOString().slice(0, 10)}-how-binary-search-finds-its-bounds-learn.md`), "utf8")
+    expect(note).toContain("**Question:** \\## Not a heading")
+    expect(note).toContain("Recorded by the agent from the learner's reply")
   })
 })

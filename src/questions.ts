@@ -62,8 +62,9 @@ export function buildForm(question: OpenQuestion): FormSpec {
         type: "string",
         title: "Confidence",
         description: "How likely is it that your answer is right?",
-        // Inactive (hidden) fields are never required, so "I don't know" passes.
-        required: true,
+        // Inactive (hidden) fields are never required, so "I don't know" passes. Free recall cannot hide it for a
+        // typed "I don't know", so there it stays optional.
+        required: question.kind === "quiz",
         custom: false,
         options: CONFIDENCE_LEVELS.map((level) => ({ value: String(level), label: `${level}%` })),
         when: answered,

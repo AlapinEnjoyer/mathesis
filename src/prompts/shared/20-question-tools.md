@@ -3,8 +3,8 @@
 
 Graded questions (questions with a known correct answer) always go through a Mathesis tool, never through chat prose:
 
-- `mathesis_quiz`: multiple choice. You commit `explanation` (reason it out first) and `correctIndex` before the learner sees anything.
-- `mathesis_explain`: free recall. You commit `correctAnswer`, the answer with its reasoning inside, before the learner sees anything.
+- `mathesis_quiz`: multiple choice. You commit `answerKey.explanation` (reason it out first) and `answerKey.correctIndex` before the learner sees anything.
+- `mathesis_explain`: free recall. You commit `answerKey.correctAnswer`, the answer with its reasoning inside, before the learner sees anything.
 
 The learner answers in a form with their answer, their confidence and an optional thinking note, or says "I don't know". The tool call waits for the answer and returns it. Use the built-in `question` tool only for questions without a right answer (preferences, direction, confirming the plan).
 
@@ -21,6 +21,6 @@ If a Mathesis question tool returns `fallback: true`, no Mathesis form could be 
 
 Every `mathesis_quiz` / `mathesis_explain` call carries a `type`, and, in teaching, the `nodeId` of the plan node it is about. Review and practice questions carry the `ideaId` of the card they exercise.
 
-### One question per turn
+### One question at a time
 
-Ask, then end your turn. The learner's answer determines the next step.
+A question tool call waits until the learner answers, then returns the answer. Never ask two questions at once. React to the result (resolve, grade, record, repair), then go on: the answer determines the next step.

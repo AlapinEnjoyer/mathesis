@@ -81,3 +81,26 @@ describe("QuestionBroker", () => {
     broker.formCancelled("frm_mathesis_q1")
   })
 })
+
+describe("QuestionBroker after a claim", () => {
+  test("a claimer that never shows the form makes the question fall back", async () => {
+    const closed: string[] = []
+    const broker = new QuestionBroker({ asked: () => {}, closed: (d) => closed.push(d.reason) }, { claimTimeoutMs: 5, showTimeoutMs: 15 })
+    const outcome = broker.ask("ses", question(), new AbortController().signal)
+    broker.claim("q1")
+    expect(await outcome).toEqual({ kind: "fallback" })
+    expect(closed).toEqual(["fallback"])
+  })
+
+  test("a shown form waits for the learner; abortAll ends it", async () => {
+    const broker = new QuestionBroker({ asked: () => {}, closed: () => {} }, { claimTimeoutMs: 5, showTimeoutMs: 10 })
+    const outcome = broker.ask("ses", question(), new AbortController().signal)
+    broker.claim("q1")
+    expect(broker.shown("frm_mathesis_q1")).toBe(true)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(broker.isOpen("q1")).toBe(true)
+    broker.abortAll()
+    expect(await outcome).toEqual({ kind: "aborted" })
+    expect(broker.shown("frm_mathesis_q1")).toBe(false)
+  })
+})

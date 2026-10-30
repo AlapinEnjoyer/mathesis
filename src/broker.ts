@@ -27,7 +27,10 @@ interface Entry {
   sessionID: string
   form: FormSpec
   claimed: boolean
+  shown: boolean
   startedAt: number
+  /** Restarts the deadline: claim in time, then show the form in time, else the question falls back. */
+  arm: (ms: number) => void
   finish: (outcome: AskOutcome, reason: CloseReason) => void
 }
 
@@ -42,7 +45,7 @@ export class QuestionBroker {
 
   constructor(
     private readonly events: BrokerEvents,
-    private readonly options: { claimTimeoutMs: number; clock?: () => number } = { claimTimeoutMs: 4000 },
+    private readonly options: { claimTimeoutMs: number; showTimeoutMs?: number; clock?: () => number } = { claimTimeoutMs: 4000 },
   ) {}
 
   private now() {
@@ -65,7 +68,14 @@ export class QuestionBroker {
         sessionID,
         form,
         claimed: false,
+        shown: false,
         startedAt: this.now(),
+        arm: (ms) => {
+          if (timer) clearTimeout(timer)
+          timer = setTimeout(() => {
+            if (!entry.shown) entry.finish({ kind: "fallback" }, "fallback")
+          }, ms)
+        },
         finish: (outcome, reason) => {
           if (this.entries.get(question.questionID) !== entry) return
           this.entries.delete(question.questionID)
@@ -79,19 +89,35 @@ export class QuestionBroker {
       this.entries.set(question.questionID, entry)
       this.byForm.set(form.id, question.questionID)
       signal.addEventListener("abort", onAbort, { once: true })
-      timer = setTimeout(() => {
-        if (!entry.claimed) entry.finish({ kind: "fallback" }, "fallback")
-      }, this.options.claimTimeoutMs)
+      entry.arm(this.options.claimTimeoutMs)
       this.events.asked({ questionID: question.questionID, sessionID, title: question.prompt })
     })
   }
 
-  /** The first claim wins and receives the form to create. Later claims get `accepted: false`. */
+  /**
+   * The first claim wins and receives the form to create. Later claims get `accepted: false`. The claimer must then
+   * report `shown` in time; a TUI that dies or fails to create the form makes the question fall back, not hang.
+   */
   claim(questionID: string): { accepted: boolean; form?: FormSpec; sessionID?: string } {
     const entry = this.entries.get(questionID)
     if (!entry || entry.claimed) return { accepted: false }
     entry.claimed = true
+    entry.arm(this.options.showTimeoutMs ?? 15_000)
     return { accepted: true, form: entry.form, sessionID: entry.sessionID }
+  }
+
+  /** The form is on screen: from now on the question waits for the learner as long as it takes. */
+  shown(formID: string): boolean {
+    const entry = this.entryForForm(formID)
+    if (!entry || !entry.claimed) return false
+    entry.shown = true
+    entry.arm(0x7fffffff)
+    return true
+  }
+
+  /** Ends every open question (plugin unload): the waiting tools return "interrupted". */
+  abortAll() {
+    for (const entry of [...this.entries.values()]) entry.finish({ kind: "aborted" }, "aborted")
   }
 
   /** A form reply (from the server's event stream, or relayed by a TUI). Unknown or finished forms are ignored. */

@@ -3,7 +3,7 @@ import type { Phase } from "../phases.ts"
 import type { LearnerAnswer } from "../questions.ts"
 import { CONFIDENCE_LEVELS } from "../questions.ts"
 import { Refusal, sessionKind, topicPlan, type Runtime } from "../runtime.ts"
-import { ANSWERS_KEPT, getSession, updateSession, type AnswerRecord, type OpenQuestion, type SessionState } from "../state.ts"
+import { ANSWERS_KEPT, mutateSession, type AnswerRecord, type OpenQuestion, type SessionState } from "../state.ts"
 import type { QuestionType } from "../store/log.ts"
 import { isSlug, today } from "../store/vault.ts"
 import { oneOf, schema, text, textList, type CallContext, type ToolSpec } from "./define.ts"
@@ -46,18 +46,29 @@ async function validateTarget(rt: Runtime, state: SessionState, type: QuestionTy
 async function ask(rt: Runtime, call: CallContext, question: OpenQuestion): Promise<string> {
   const state = call.state!
   const nodeChanged = state.phase === "teach" && question.nodeId && question.nodeId !== state.currentNode
-  // Commit before the learner sees anything.
-  await updateSession(rt.store, call.sessionID, { openQuestion: question, ...(nodeChanged ? { currentNode: question.nodeId } : {}) }, rt.now())
+  // Commit before the learner sees anything. Checked and set in one step, so two parallel calls cannot both ask.
+  await mutateSession(
+    rt.store,
+    call.sessionID,
+    (current) => {
+      const open = current.openQuestion
+      if (open && !open.fallback && rt.broker.isOpen(open.questionID)) {
+        throw new Refusal(`a question is still open (${open.questionID}). Wait for the learner's answer first.`)
+      }
+      return { openQuestion: question, ...(nodeChanged ? { currentNode: question.nodeId } : {}) }
+    },
+    rt.now(),
+  )
   if (nodeChanged && state.topic) rt.events.planUpdated({ sessionID: call.sessionID, topic: state.topic })
   await call.progress({ status: "waiting for the learner's answer" }).catch(() => {})
 
   const outcome = await rt.broker.ask(call.sessionID, question, call.signal)
   if (outcome.kind === "fallback") {
-    await updateSession(rt.store, call.sessionID, { openQuestion: { ...question, fallback: true } }, rt.now())
+    await mutateSession(rt.store, call.sessionID, (current) => (current.openQuestion?.questionID === question.questionID ? { openQuestion: { ...question, fallback: true } } : {}), rt.now())
     return fallbackText(question)
   }
   if (outcome.kind === "aborted") {
-    await updateSession(rt.store, call.sessionID, { openQuestion: undefined }, rt.now())
+    await clearOpen(rt, call.sessionID, question.questionID)
     return "The question was interrupted before the learner answered."
   }
   return recordAnswer(rt, call.sessionID, question, outcome.answer, outcome.elapsedMs)
@@ -80,6 +91,30 @@ function fallbackText(question: OpenQuestion): string {
   return lines.join("\n")
 }
 
+/**
+ * The learner replied after a fallback (a chat message, or an answer in the built-in question form). Only then may
+ * mathesis_answer_record record a reply, so the model cannot answer for the learner.
+ */
+export async function noteLearnerReply(rt: Runtime, sessionID: string) {
+  await mutateSession(
+    rt.store,
+    sessionID,
+    (current) => {
+      const open = current.openQuestion
+      return open?.fallback && !open.learnerReplied ? { openQuestion: { ...open, learnerReplied: true } } : {}
+    },
+    rt.now(),
+  ).catch(() => {})
+}
+
+/** Clears the open question, but only if it is still this one. */
+async function clearOpen(rt: Runtime, sessionID: string, questionID: string) {
+  await mutateSession(rt.store, sessionID, (current) => (current.openQuestion?.questionID === questionID ? { openQuestion: undefined } : {}), rt.now())
+}
+
+/** A learner's text in a session note must not become a heading of the note. */
+const inline = (text: string) => text.replace(/^(\s*)(#{1,6}\s)/gm, "$1\\$2")
+
 export async function recordAnswer(
   rt: Runtime,
   sessionID: string,
@@ -89,7 +124,7 @@ export async function recordAnswer(
 ): Promise<string> {
   const now = rt.now()
   if (answer.status === "cancelled") {
-    await updateSession(rt.store, sessionID, { openQuestion: undefined }, now)
+    await clearOpen(rt, sessionID, question.questionID)
     return "The learner dismissed the question without answering. Do not grade it. Continue from where the learner is: ask what they want, or re-ask later."
   }
   const record: AnswerRecord = {
@@ -109,10 +144,17 @@ export async function recordAnswer(
     ...(answer.thinking ? { thinking: answer.thinking } : {}),
     answeredAt: now.toISOString(),
     ...(elapsedMs !== undefined ? { elapsedMs } : {}),
+    ...(question.fallback ? { fallback: true } : {}),
   }
-  const state = await getSession(rt.store, sessionID)
-  const answers = [...(state?.answers ?? []), record].slice(-ANSWERS_KEPT)
-  await updateSession(rt.store, sessionID, { openQuestion: undefined, answers }, now)
+  const state = await mutateSession(
+    rt.store,
+    sessionID,
+    (current) => ({
+      answers: [...(current.answers ?? []), record].slice(-ANSWERS_KEPT),
+      ...(current.openQuestion?.questionID === question.questionID ? { openQuestion: undefined } : {}),
+    }),
+    now,
+  )
   if (state?.topic) {
     await rt.vault
       .appendSession({ sessionID, topic: state.topic, kind: sessionKind(state.phase), date: today(now) }, noteBlock(question, record, now))
@@ -127,14 +169,15 @@ function choiceText(question: OpenQuestion, index: number | undefined) {
 
 function noteBlock(question: OpenQuestion, record: AnswerRecord, now: Date) {
   const target = question.nodeId ? ` · \`${question.nodeId}\`` : question.ideaId ? ` · [${question.ideaId}](../ideas/${question.ideaId}.md)` : ""
-  const lines = [`### ${clock(now)} · ${question.type}${target}`, "", `**Question:** ${question.prompt}`]
-  if (question.options) lines.push("", ...question.options.map((option, i) => `${letter(i)}. ${option}`))
+  const lines = [`### ${clock(now)} · ${question.type}${target}`, "", `**Question:** ${inline(question.prompt)}`]
+  if (question.options) lines.push("", ...question.options.map((option, i) => `${letter(i)}. ${inline(option)}`))
   const verdict = record.correct === true ? " · correct" : record.correct === false && record.status === "answered" ? " · wrong" : ""
   const given = record.status === "dont_know" ? "I don't know" : question.kind === "quiz" ? choiceText(question, record.choice) : record.text
-  lines.push("", `**Answer:** ${given}${record.confidence !== undefined ? ` · confidence ${record.confidence}%` : ""}${verdict}`)
-  if (record.thinking) lines.push("", `**Thinking:** ${record.thinking}`)
+  lines.push("", `**Answer:** ${inline(given ?? "")}${record.confidence !== undefined ? ` · confidence ${record.confidence}%` : ""}${verdict}`)
+  if (record.thinking) lines.push("", `**Thinking:** ${inline(record.thinking)}`)
   const committed = question.kind === "quiz" ? `${choiceText(question, question.correctIndex)}. ${question.explanation ?? ""}` : question.correctAnswer
-  lines.push("", `**Committed answer:** ${committed}`)
+  lines.push("", `**Committed answer:** ${inline(committed ?? "")}`)
+  if (record.fallback) lines.push("", "_Recorded by the agent from the learner's reply (no form)._")
   return lines.join("\n")
 }
 
@@ -207,10 +250,14 @@ export const questionTools: ToolSpec[] = [
       ["question", "options", "answerKey", "type"],
     ),
     async run(input, call, rt) {
-      refuseWhileOpen(call.state)
+      await refuseWhileOpen(rt, call)
       const state = call.state!
       const prompt = text(input, "question", { max: 4000 })!
-      const options = textList(input, "options")
+      const raw = input.options
+      if (!Array.isArray(raw) || raw.some((option) => typeof option !== "string" || !option.trim())) {
+        throw new Refusal("`options` must be a list of non-empty strings.")
+      }
+      const options = (raw as string[]).map((option) => option.trim())
       if (options.length < 2 || options.length > 6) throw new Refusal("give 2–6 options.")
       if (new Set(options).size !== options.length) throw new Refusal("options must be different from each other.")
       const key = (input.answerKey ?? {}) as Record<string, unknown>
@@ -247,7 +294,7 @@ export const questionTools: ToolSpec[] = [
       ["question", "answerKey", "type"],
     ),
     async run(input, call, rt) {
-      refuseWhileOpen(call.state)
+      await refuseWhileOpen(rt, call)
       const state = call.state!
       const prompt = text(input, "question", { max: 4000 })!
       const correctAnswer = text((input.answerKey ?? {}) as Record<string, unknown>, "correctAnswer", { max: 4000 })!
@@ -285,8 +332,12 @@ export const questionTools: ToolSpec[] = [
       if (!question || question.questionID !== questionID || !question.fallback) {
         throw new Refusal("there is no fallback question with this questionID. Use it only after a `fallback: true` result.")
       }
+      if (!question.learnerReplied) {
+        throw new Refusal("the learner has not replied yet. Ask the question (built-in question tool or chat), end your turn, and record their actual reply.")
+      }
       const thinking = text(input, "thinking", { optional: true, max: 8000 })
-      const confidence = input.confidence === undefined ? undefined : Number(input.confidence)
+      const given = input.confidence === undefined ? undefined : Number(input.confidence)
+      const confidence = given === undefined || !Number.isFinite(given) ? undefined : Math.min(100, Math.max(0, given))
       let answer: LearnerAnswer
       if (input.dontKnow === true) answer = { status: "dont_know", ...(thinking ? { thinking } : {}) }
       else if (question.kind === "quiz") {

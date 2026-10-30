@@ -33,4 +33,4 @@ Every question should move an edge somewhere: no filler, no re-asking what the l
 
 ## 5. Conclude with `mathesis_probe_done`
 
-When every strand is bracketed and the goal is concrete, call `mathesis_probe_done` once. One entry per strand: name, floor, ceiling, misconceptions, what to build from, all written from the evidence. It is refused while a question is open. It writes the assessment into the topic note and moves the session to the teach phase. Then write one short closing sentence and end your turn; the plan comes next.
+When every strand is bracketed and the goal is concrete, call `mathesis_probe_done` once. One entry per strand: name, floor, ceiling, misconceptions, what to build from, all written from the evidence. It is refused while a question is open. It writes the assessment into the topic note and moves the session to the teach phase. Then go straight on to planning: the teaching instructions apply from your next step.

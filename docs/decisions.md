@@ -71,3 +71,23 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   Remove the marker to keep your own edits.
 - **Misconception cards** have `kind: misconception`, `about: [ids]`, the right model as Claim and the wrong model
   under "Known misconceptions"; the ideas they corrupt link to them. Recording one again rates it Again.
+
+### Phase 2 review fixes
+
+- **A question cannot lock a session.** If the broker no longer knows the open question (server restart), the next
+  tool call turns it into a fallback question instead of refusing. Unloading the plugin aborts open questions.
+- **Claim, then show, in time.** After a claim the TUI must report `shown` within 15 s; a TUI that dies or cannot
+  create the form makes the question fall back instead of hanging. A failed form creation hands the question back.
+- **State changes that check something are atomic** (`mutateSession` under the session lock): one open question per
+  session, one use per answer (released again if the card write fails), one misconception card per answer and id.
+- **`idea_upsert` can only prove the check's own node or a new idea**; it refuses misconception cards and cards of
+  another topic. `misconception_record` with a `questionID` needs a real answer that was not right.
+- **`answer_record` needs a reply from the learner** after the fallback: a chat message (session `prompt` hook) or an
+  answer to the built-in `question` tool (tool `execute.after` hook). Fallback answers are marked in the session note.
+- **Mathesis tools are hidden in sessions that are not Mathesis sessions** (another agent and no Mathesis state).
+  This depends only on the session, so the tool list stays constant within it.
+- **Mathesis sessions and the agent deny all file edits and shell commands.** The Mathesis tools write the vault
+  themselves; reading the learner's files stays allowed.
+- **TUI calls go to the location of the event**, and the TUI subscribes again after `server.connected`.
+- **Not verified yet:** whether the TUI sends its own selected model with the learner's next message in a session
+  that Mathesis created with another model (that would switch the model mid-session).

@@ -9,4 +9,4 @@ Every answer carries `confidence`: the learner's stated probability, in percent,
 - Correct + low confidence: fragile knowledge or a lucky guess. Worth one reinforcing touch, not celebration.
 - Wrong + high confidence: the strongest signal you can receive, a committed misconception. Name the crack, probe it, and re-teach around it. Record it with `mathesis_misconception_record`.
 - Wrong + low confidence: a shaky near miss or an honest gap. A small correction usually suffices.
-- "I don't know" (`dontKnow: true`) carries no confidence: they declined to guess. A genuine gap, never a wrong answer.
+- "I don't know" (the result says so) carries no confidence: they declined to guess. A genuine gap, never a wrong answer.
