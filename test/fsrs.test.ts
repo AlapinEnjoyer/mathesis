@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { isDue, newSrs, pullForward, rate, readSrs, review, type AnswerOutcome, type Grade } from "../src/srs/fsrs.ts"
+import { dueFirst, isDue, newSrs, pullForward, rate, readSrs, review, type AnswerOutcome, type Grade, type Srs } from "../src/srs/fsrs.ts"
 
 const day = 24 * 60 * 60 * 1000
 const t0 = new Date("2026-10-30T10:00:00.000Z")
@@ -101,4 +101,35 @@ describe("readSrs (hand-edited frontmatter)", () => {
     expect(Number.isFinite(s.stability)).toBe(true)
     expect(s.reps).toBe(1)
   })
+})
+
+describe("hand-edited state", () => {
+  test("a missing last review date is derived from the interval, so elapsed time counts", () => {
+    const due = "2026-11-29T10:00:00.000Z"
+    const withLast = review(
+      { state: "review", due, stability: 30, difficulty: 5, reps: 3, lapses: 0, last: "2026-10-30T10:00:00.000Z", scheduledDays: 30, learningSteps: 0 },
+      "good",
+      new Date(due),
+    )
+    const withoutLast = review(
+      { state: "review", due, stability: 30, difficulty: 5, reps: 3, lapses: 0, scheduledDays: 30, learningSteps: 0 },
+      "good",
+      new Date(due),
+    )
+    expect(withoutLast).toEqual(withLast)
+  })
+
+  test("starting over keeps the review count and lapses", () => {
+    const s = review({ state: "review", due: "2026-11-01T00:00:00.000Z", stability: 0, difficulty: 0, reps: 4, lapses: 2, scheduledDays: 0, learningSteps: 0 }, "good", at(3))
+    expect(s.reps).toBe(5)
+    expect(s.lapses).toBe(2)
+  })
+})
+
+test("dueFirst lists due cards, most overdue first", () => {
+  const a = { id: "a", srs: review(undefined, "good", t0) }
+  const b = { id: "b", srs: review(undefined, "easy", t0) }
+  const c: { id: string; srs?: Srs } = { id: "c" }
+  expect(dueFirst([b, c, a], at(100)).map((x) => x.id)).toEqual(["a", "b"])
+  expect(dueFirst([a, b, c], t0)).toEqual([])
 })

@@ -36,11 +36,13 @@ export function composePrompt(phase: Phase, root = PROMPTS_DIR): string {
     base = [stripComments(readFileSync(join(root, "base.md"), "utf8"))]
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+    // The shipped prompts must exist: an empty doctrine would reach the model without any warning.
+    if (root === PROMPTS_DIR) throw new Error(`Mathesis prompts are missing: ${join(root, "base.md")}`)
   }
   return [...base, ...fragments(join(root, "shared")), ...fragments(join(root, phase))].filter(Boolean).join("\n\n")
 }
 
-/** Cached per phase: prompt files ship with the package and do not change while opencode runs. */
+/** Cached per phase: prompt files ship with the package. Edits to them need a plugin reload (a new cache). */
 export function promptCache(root = PROMPTS_DIR) {
   const cache = new Map<Phase, string>()
   return (phase: Phase) => {

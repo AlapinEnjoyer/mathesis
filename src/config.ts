@@ -36,8 +36,11 @@ export function formatModel(model: ModelRef): string {
   return `${model.providerID}/${model.id}`
 }
 
-/** Plugin options from opencode.jsonc. Unknown or malformed values fall back to defaults. */
-export function resolveConfig(options: Readonly<Record<string, unknown>>, base = process.cwd()): Config {
+/**
+ * Plugin options from opencode.jsonc. Unknown or malformed values fall back to defaults. A relative vault path is
+ * resolved against the home directory, so the vault does not move with the project opencode runs in.
+ */
+export function resolveConfig(options: Readonly<Record<string, unknown>>, base = homedir()): Config {
   const vaultOption = typeof options.vault === "string" && options.vault.trim() ? options.vault.trim() : DEFAULT_VAULT
   const expanded = expandHome(vaultOption)
   const vault = isAbsolute(expanded) ? expanded : resolve(base, expanded)
