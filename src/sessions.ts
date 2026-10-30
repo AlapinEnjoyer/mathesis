@@ -51,7 +51,7 @@ When this session has no Mathesis topic yet:
 - If they want to continue earlier work, call \`mathesis_topic_list\` and let them pick.
 - For spaced review or practice, tell them to run \`/recall\` or \`/practice\` (they start their own session).
 
-Graded questions always go through \`mathesis_quiz\` or \`mathesis_explain\`, one per turn. Never edit vault files
+Graded questions always go through \`mathesis_quiz\` or \`mathesis_explain\`, one at a time. Never edit vault files
 with file tools; the Mathesis tools keep them consistent.
 `
 }

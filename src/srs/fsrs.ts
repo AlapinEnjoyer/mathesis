@@ -156,7 +156,17 @@ export function pullForward(srs: Srs, now: Date): Srs {
   return { ...srs, due: now.toISOString() }
 }
 
-/** Ideas whose card is due, most overdue first. */
+/** The end of the learner's local day. Cards due before it count as due today (a 20:00 card comes up in the morning). */
+export function endOfDay(now: Date): Date {
+  const end = new Date(now)
+  end.setHours(23, 59, 59, 999)
+  return end
+}
+
+/** Due today: what /recall, the footer and the panel count. FSRS itself uses the exact time. */
+export const isDueToday = (srs: Srs | undefined, now: Date) => isDue(srs, endOfDay(now))
+
+/** Ideas whose card is due (at `now`), most overdue first. Pass `endOfDay(now)` for "due today". */
 export function dueFirst<T extends { srs?: Srs }>(items: readonly T[], now: Date): T[] {
   return items
     .filter((item) => isDue(item.srs, now))

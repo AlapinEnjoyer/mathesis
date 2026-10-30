@@ -39,6 +39,13 @@ async function validateTarget(rt: Runtime, state: SessionState, type: QuestionTy
   if (state.phase === "review" || state.phase === "practice") {
     if (!ideaId) throw new Refusal("review and practice questions need the `ideaId` of the card they exercise.")
     if (!isSlug(ideaId) || !(await rt.vault.hasIdea(ideaId))) throw new Refusal(`there is no card \`${ideaId}\`.`)
+    if (state.phase === "review" && ideaId !== state.currentNode) {
+      throw new Refusal(
+        state.currentNode
+          ? `the card being reviewed is \`${state.currentNode}\`; ask about that card (other cards come when mathesis_review_next serves them).`
+          : "call mathesis_review_next first; review questions are about the card it serves.",
+      )
+    }
   }
   return { ...(nodeId ? { nodeId } : {}), ...(ideaId ? { ideaId } : {}) }
 }
@@ -125,7 +132,22 @@ export async function recordAnswer(
   const now = rt.now()
   if (answer.status === "cancelled") {
     await clearOpen(rt, sessionID, question.questionID)
-    return "The learner dismissed the question without answering. Do not grade it. Continue from where the learner is: ask what they want, or re-ask later."
+    // The learner saw the wording, so it counts as asked. In review, a dismissed card is skipped for this session.
+    if (question.ideaId && (question.type !== "check" && question.type !== "predict")) {
+      await rt.vault.addAskedBefore(question.ideaId, question.prompt).catch(() => {})
+    }
+    const after = await mutateSession(
+      rt.store,
+      sessionID,
+      (current) =>
+        current.phase === "review" && question.ideaId && current.currentNode === question.ideaId
+          ? { done: [...(current.done ?? []), question.ideaId], currentNode: undefined }
+          : {},
+      now,
+    )
+    return after.phase === "review"
+      ? "The learner dismissed the question. The card is skipped for this session (its schedule is unchanged). Ask in one line whether they want to go on, or call mathesis_review_next."
+      : "The learner dismissed the question without answering. Do not grade it. Continue from where the learner is: ask what they want, or come back to it later in a fresh situation."
   }
   const record: AnswerRecord = {
     questionID: question.questionID,

@@ -31,6 +31,11 @@ export interface ReviewEntry {
   dontKnow?: boolean
   rating: Grade
   elapsedMs?: number
+  /** A review that forgot a card that had been learned. */
+  lapse?: boolean
+  /** Practice: the highest hint rung used ("R0"–"R5"), and the kind of miss. */
+  hints?: string
+  miss?: string
 }
 
 /** A lapse of `cause` moved this foundation's due date forward. Always scheduled. */

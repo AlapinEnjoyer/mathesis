@@ -9,7 +9,7 @@ import { AGENT_NAME, setup, startSession } from "./sessions.ts"
 import { status } from "./status.ts"
 import { getSession } from "./state.ts"
 import { Vault } from "./store/vault.ts"
-import { isDue } from "./srs/fsrs.ts"
+import { isDueToday } from "./srs/fsrs.ts"
 import { NAMESPACE, registerTools } from "./tools/define.ts"
 import { practiceTools } from "./tools/practice.ts"
 import { noteLearnerReply, questionTools } from "./tools/questions.ts"
@@ -88,14 +88,14 @@ export default Plugin.define({
         return {
           topics: topics.map((topic) => {
             const own = topicIdeas(topic, ideas)
-            return { id: topic.id, goal: topic.goal, ideas: own.length, due: own.filter((i) => isDue(i.srs, now)).length }
+            return { id: topic.id, goal: topic.goal, ideas: own.length, due: own.filter((i) => isDueToday(i.srs, now)).length }
           }),
         }
       },
       status: async () => status(rt),
       due: async () => {
         const { ideas } = await vault.listIdeas()
-        return { due: ideas.filter((idea) => isDue(idea.srs, rt.now())).length }
+        return { due: ideas.filter((idea) => isDueToday(idea.srs, rt.now())).length }
       },
       panel: async (input) => panel(rt, (input as { sessionID: string }).sessionID),
       setup: async (input) => setup(rt, (input ?? {}) as SetupInput),

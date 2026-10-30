@@ -303,6 +303,25 @@ export class Vault {
     return { idea: toIdea(patch.id, note), created }
   }
 
+  /**
+   * Reads, changes and writes a card's FSRS state as one step under the note's lock, so two reviews of the same card
+   * cannot overwrite each other. `change` may return undefined to leave the card as it is.
+   */
+  async updateSrs(id: string, change: (srs: Srs | undefined, idea: Idea) => Srs | undefined): Promise<{ before?: Srs; after?: Srs }> {
+    const path = this.ideaPath(id)
+    return this.withLock(path, async () => {
+      const note = await this.readNote(path)
+      if (!note) throw new Error(`Unknown idea "${id}"`)
+      const idea = toIdea(id, note)
+      const after = change(idea.srs, idea)
+      if (after) {
+        mergeField(note, "srs", { ...after })
+        await this.writeNote(path, note)
+      }
+      return { ...(idea.srs ? { before: idea.srs } : {}), ...(after ? { after } : {}) }
+    })
+  }
+
   /** Writes FSRS state key by key, so unknown keys and comments inside `srs` survive. */
   async setSrs(id: string, srs: Srs): Promise<void> {
     await this.updateExisting(id, (note) => mergeField(note, "srs", { ...srs }))

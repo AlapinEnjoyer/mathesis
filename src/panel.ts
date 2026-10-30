@@ -1,6 +1,6 @@
 import { MARK_SYMBOL, planRows, type NodeMark } from "./plan.ts"
 import { cardCount, dueLabel, topicPlan, type Runtime } from "./runtime.ts"
-import { dueFirst, isDue } from "./srs/fsrs.ts"
+import { dueFirst, endOfDay, isDue } from "./srs/fsrs.ts"
 import { getSession } from "./state.ts"
 
 const DUE_SHOWN = 10
@@ -12,7 +12,7 @@ export interface PanelRow {
   tone?: "heading" | "muted" | "current"
 }
 
-/** The Mathesis side panel for one session: phase, the plan as an indented dependency list, and the cards due now. */
+/** The Mathesis side panel for one session: phase, the plan as an indented dependency list, and the cards due today. */
 export async function panel(rt: Runtime, sessionID: string): Promise<{ title: string; rows: PanelRow[] }> {
   const now = rt.now()
   const state = await getSession(rt.store, sessionID)
@@ -43,8 +43,8 @@ export async function panel(rt: Runtime, sessionID: string): Promise<{ title: st
   } else if (state?.currentNode && byId.has(state.currentNode)) {
     rows.push({ depth: 0, text: "" }, { depth: 0, text: `Now: ${state.currentNode}`, tone: "current" })
   }
-  const due = dueFirst(ideas, now)
-  rows.push({ depth: 0, text: "" }, { depth: 0, text: due.length ? `Due now: ${cardCount(due.length)}` : "No cards due now.", tone: "heading" })
+  const due = dueFirst(ideas, endOfDay(now))
+  rows.push({ depth: 0, text: "" }, { depth: 0, text: due.length ? `Due today: ${cardCount(due.length)}` : "No cards due today.", tone: "heading" })
   for (const idea of due.slice(0, DUE_SHOWN)) rows.push({ depth: 1, text: `↻ ${idea.id} (${dueLabel(idea, now)})` })
   if (due.length > DUE_SHOWN) rows.push({ depth: 1, text: `… and ${due.length - DUE_SHOWN} more`, tone: "muted" })
   return { title, rows }

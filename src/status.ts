@@ -1,5 +1,6 @@
 import { cardCount, dueLabel, ideaState, topicIdeas, type Runtime } from "./runtime.ts"
-import { isDue, parseDate } from "./srs/fsrs.ts"
+import { isDueToday, parseDate } from "./srs/fsrs.ts"
+import { today } from "./store/vault.ts"
 import { readLog } from "./store/log.ts"
 
 const RECENT_DAYS = 7
@@ -13,26 +14,26 @@ export async function status(rt: Runtime): Promise<{ due: number; cards: number;
     readLog(rt.vault.logPath),
   ])
   const cards = ideas.filter((idea) => idea.srs)
-  const due = cards.filter((idea) => isDue(idea.srs, now))
-  const lines: string[] = [`${due.length} of ${cardCount(cards.length)} due.`]
+  const due = cards.filter((idea) => isDueToday(idea.srs, now))
+  const lines: string[] = [`${due.length} of ${cardCount(cards.length)} due today.`]
   const next = cards
     .map((idea) => parseDate(idea.srs?.due))
     .filter((d): d is Date => !!d && d.getTime() > now.getTime())
     .sort((a, b) => a.getTime() - b.getTime())[0]
-  if (!due.length && next) lines.push(`Next review: ${next.toISOString().slice(0, 10)}.`)
+  if (!due.length && next) lines.push(`Next review: ${today(next)}.`)
   if (topics.length) {
-    lines.push("", "Topics:")
+    lines.push("", "Topics (use the id with /recall <id> or /practice <id>):")
     for (const topic of topics) {
       const own = topicIdeas(topic, ideas)
-      const ownDue = own.filter((idea) => isDue(idea.srs, now)).length
-      lines.push(`  ${topic.goal}: ${cardCount(own.length)}${ownDue ? `, ${ownDue} due` : ""}`)
+      const ownDue = own.filter((idea) => isDueToday(idea.srs, now)).length
+      lines.push(`  ${topic.id}: ${topic.goal} · ${cardCount(own.length)}${ownDue ? `, ${ownDue} due` : ""}`)
     }
   }
   const since = now.getTime() - RECENT_DAYS * 86_400_000
   const lapses = [
     ...new Set(
       entries
-        .filter((e) => e.mode !== "pull" && e.mode !== "practice" && e.rating === "again" && Date.parse(e.ts) >= since)
+        .filter((e) => e.mode === "review" && e.lapse === true && Date.parse(e.ts) >= since)
         .map((e) => e.ideaId),
     ),
   ]

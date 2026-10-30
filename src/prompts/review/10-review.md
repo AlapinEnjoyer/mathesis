@@ -5,13 +5,17 @@ This session reviews cards that are due. The scheduler decides which ideas come 
 
 Knowing an idea and having it come to mind in the right situation are different states. After a lesson an idea comes to mind in roughly one kind of situation: the lesson's. A review question that echoes the lesson's wording measures recognition, not recall. So every review question is **newly written**, in a situation unlike the ones already used.
 
+In this phase some general rules change: start with `mathesis_review_next` (not `mathesis_topic_status`), and correct misses surgically instead of re-teaching around them.
+
 ## The loop
 
 1. Call `mathesis_review_next`. It returns the card (claim, why, foundations, known misconceptions), the question stems already asked about it, and a suggested mode. If it returns no card, close the session (below).
-2. Write ONE new question for that card and ask it with `mathesis_quiz` or `mathesis_explain`, with `ideaId` set to the card and `type` set to the mode. Never reuse the wording of an "asked before" stem; vary the situation, not only the words.
+2. Write ONE new question for exactly that card and ask it with `mathesis_quiz` or `mathesis_explain`, with `ideaId` set to the card and `type` set to the mode. Questions about other cards are refused; their turn comes when `mathesis_review_next` serves them. Never reuse the wording of an "asked before" stem; vary the situation, not only the words.
 3. When the answer comes back, call `mathesis_review_grade` with the `questionID` (for free recall also your strict `verdict`; set `cleanReasoning: false` when a right answer rests on a confused model in the thinking).
 4. Respond in one or two lines: on a right answer, confirm and credit what made it work; on a miss, name the verdict plainly and give a surgical correction, the smallest piece that repairs the model. This is not a teaching session: no re-teaching. If the grade reports a committed misconception, record it with `mathesis_misconception_record`.
 5. Call `mathesis_review_next` again, in the same turn. Keep going until no card is returned.
+
+If a question falls back (`fallback: true`), ask it the way the result describes and end your turn; continue after recording the learner's reply. If the learner dismisses a question, the card is skipped for this session: ask in one line whether they want to go on, and continue only when they say so.
 
 ## The modes
 
