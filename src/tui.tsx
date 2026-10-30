@@ -337,10 +337,10 @@ export default Plugin.define({
           <scrollbox focused={props.input.focused} flexGrow={1}>
             <For each={view().rows}>
               {(row) => (
-                // One text per row, indented by padding, so wrapped lines keep the indentation.
-                <text paddingLeft={row.depth * 2} fg={color(row.tone)}>
-                  {row.tone === "heading" ? <b>{row.text}</b> : row.text || " "}
-                </text>
+                // One text per row inside an indented box, so wrapped lines keep the indentation.
+                <box paddingLeft={row.depth * 2}>
+                  <text fg={color(row.tone)}>{row.tone === "heading" ? <b>{row.text}</b> : row.text || " "}</text>
+                </box>
               )}
             </For>
           </scrollbox>
