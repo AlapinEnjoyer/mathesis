@@ -1,0 +1,56 @@
+{
+  "name": "opencode-mathesis",
+  "version": "0.0.0",
+  "description": "Mathesis: probe, teach, practice and spaced repetition for opencode",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "author": "AlapinEnjoyer",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AlapinEnjoyer/mathesis.git"
+  },
+  "homepage": "https://github.com/AlapinEnjoyer/mathesis#readme",
+  "bugs": {
+    "url": "https://github.com/AlapinEnjoyer/mathesis/issues"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "learning",
+    "spaced-repetition",
+    "fsrs",
+    "tutor"
+  ],
+  "exports": {
+    ".": "./src/server.ts",
+    "./tui": "./src/tui.tsx",
+    "./rpc": "./src/rpc.ts"
+  },
+  "files": [
+    "src",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.2.1",
+    "ts-fsrs": "6.0.0",
+    "yaml": "2.9.1"
+  },
+  "peerDependencies": {
+    "@opentui/core": ">=0.7.0",
+    "@opentui/solid": ">=0.7.0",
+    "solid-js": ">=1.9.0"
+  },
+  "devDependencies": {
+    "@opentui/core": "0.7.0",
+    "@opentui/solid": "0.7.0",
+    "@types/bun": "^1.4.4",
+    "solid-js": "1.9.12",
+    "typescript": "7.0.2"
+  }
+}
