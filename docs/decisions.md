@@ -47,3 +47,27 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   header for adapted LearnHarness text, which stays in the source files.
 - **Phase transitions:** probe → teach, and teach → probe (re-probe a topic). Review and practice sessions keep their
   phase. A session without a phase can enter any phase.
+
+## Phase 2 (probe and teach)
+
+- **Question path, as built and tested in the TUI (2026-10-30):** the tool commits the answer key, the broker emits
+  `questionAsked`, the first TUI to `claim` creates the native form with the fixed id `frm_mathesis_<questionID>`,
+  and the server watches `form.replied` / `form.cancelled` itself; a TUI also relays them (the first outcome wins).
+  A restarted TUI calls `pending` and `form.get` to show or settle open questions. No claim within `claimTimeoutMs`
+  (default 4 s) → `fallback: true`, then `mathesis_answer_record`.
+- **The answer key is a nested `answerKey` object.** The TUI's tool-call line shows only scalar inputs (`question`,
+  `type`, `nodeId`), so the committed answer stays hidden while the form is open (checked in the TUI).
+- **Only a passed check creates a card**, and only through the answer record that the question tool stored in the
+  session: `idea_upsert` needs the `questionID` of a `check` that was answered correctly (multiple choice) or graded
+  correct/partial by the agent (free recall). One answer can be used once.
+- **Free-recall grading stays with the conversation model** (handoff §2c): the tool returns the learner's words next
+  to the committed answer, and the agent passes its verdict to the tool that records the outcome.
+- **`/learn`, `/mathesis-setup` are TUI commands** that call RPC `start` / `setup`; the server creates the session
+  with the model (validated against the model list), the `mathesis` agent when it exists, and per-session permissions
+  (edit only the vault, no shell).
+- **`topic_start` never creates a second topic in a session that has one**, unless `topic` is passed explicitly
+  (found in the TUI test: the agent restated the goal in other words).
+- **`/mathesis-setup` rewrites the agent file only while it still has the `<!-- mathesis-agent v… -->` marker.**
+  Remove the marker to keep your own edits.
+- **Misconception cards** have `kind: misconception`, `about: [ids]`, the right model as Claim and the wrong model
+  under "Known misconceptions"; the ideas they corrupt link to them. Recording one again rates it Again.

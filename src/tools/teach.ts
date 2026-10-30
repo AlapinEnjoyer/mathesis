@@ -76,7 +76,7 @@ export const teachTools: ToolSpec[] = [
           `- Build from: ${text(strand, "buildFrom", { max: 2000 })}`,
         ].join("\n")
       })
-      await rt.vault.updateTopic(topic, { sections: { Assessment: [`Probed ${today(now)}.`, "", summary, "", ...blocks].join("\n\n") } }, now)
+      await rt.vault.updateTopic(topic, { sections: { Assessment: [`Probed ${today(now)}.`, summary, ...blocks].join("\n\n") } }, now)
       await setPhase(rt.store, call.sessionID, "teach", {}, now)
       return [
         "Assessment saved in the topic note. The session is now in the teach phase.",

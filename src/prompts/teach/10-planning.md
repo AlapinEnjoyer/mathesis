@@ -34,4 +34,4 @@ When the ground shifts mid-lesson (a missing foundation, a deeper confusion), ne
 
 **Stress-test the roots first.** For every node you treat as foundational: is it really an unconditional truth for this learner, or a disguised theorem that derives from something simpler? If it derives, push it down and extend the map.
 
-**Presenting ends your turn.** Ask the learner to confirm the plan (built-in `question` tool). If they want changes, revise and present again. Never teach in the presenting turn. Rewrites mid-lesson carry on without re-presenting.
+**Presenting ends with a question.** Ask the learner to confirm the plan (built-in `question` tool), and teach nothing before the answer. If they want changes, revise and present again. When they confirm, begin the first node at once, in the same turn: its prediction, or its first step. Rewrites mid-lesson carry on without re-presenting.
