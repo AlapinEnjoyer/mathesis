@@ -155,6 +155,35 @@ export function depths(plan: Plan): Map<string, number> {
 
 export type NodeMark = "held" | "due" | "current" | "none"
 
+export interface PlanRow {
+  id: string
+  title: string
+  depth: number
+  mark: NodeMark
+  /** Titles of the nodes this one needs. */
+  needs: string[]
+}
+
+/** The plan as rows, foundations first, each with its depth (longest chain of prerequisites below it). */
+export function planRows(plan: Plan, marks: (id: string) => NodeMark = () => "none"): PlanRow[] {
+  const depth = depths(plan)
+  const title = new Map(plan.nodes.map((node) => [node.id, node.title]))
+  const requires = new Map<string, string[]>()
+  for (const { from, to } of plan.edges) requires.set(to, [...(requires.get(to) ?? []), from])
+  return plan.nodes
+    .map((node, index) => ({ node, index }))
+    .sort((a, b) => depth.get(a.node.id)! - depth.get(b.node.id)! || a.index - b.index)
+    .map(({ node }) => ({
+      id: node.id,
+      title: node.title,
+      depth: depth.get(node.id)!,
+      mark: marks(node.id),
+      needs: (requires.get(node.id) ?? []).map((id) => title.get(id) ?? id),
+    }))
+}
+
+export const MARK_SYMBOL: Record<NodeMark, string> = { held: "✓", due: "↻", current: "▶", none: "·" }
+
 /**
  * The plan as an indented list, foundations first: each node is indented by its depth and lists what it needs.
  * Used in the topic note, in tool results and in the TUI panel (mermaid does not render in a terminal).

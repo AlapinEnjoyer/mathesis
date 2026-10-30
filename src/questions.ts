@@ -94,7 +94,7 @@ export function parseFormAnswer(question: OpenQuestion, raw: Record<string, unkn
   const answer = str(raw.answer)
   if (question.kind === "quiz") {
     if (answer === DONT_KNOW) return { status: "dont_know", ...(thinking ? { thinking } : {}) }
-    const choice = Number(answer)
+    const choice = answer === "" ? Number.NaN : Number(answer)
     if (!Number.isInteger(choice) || choice < 0 || choice >= (question.options?.length ?? 0)) {
       return { status: "cancelled", message: `invalid choice "${answer}"` }
     }
@@ -107,6 +107,9 @@ export function parseFormAnswer(question: OpenQuestion, raw: Record<string, unkn
 }
 
 function confidenceOf(raw: Record<string, unknown>): { confidence?: number } {
-  const value = Number(str(raw.confidence))
+  // An empty value is no confidence, not 0 % (Number("") is 0).
+  const given = str(raw.confidence)
+  if (!given) return {}
+  const value = Number(given)
   return Number.isFinite(value) && value >= 0 && value <= 100 ? { confidence: value } : {}
 }

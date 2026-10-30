@@ -1,10 +1,15 @@
 import { Plugin } from "@opencode/plugin/tui"
+import type { PanelInput } from "@opencode/plugin/tui/context"
+import { createEffect, createSignal, For, on, Show } from "solid-js"
+import { localDate, shouldNotify } from "./notify.ts"
 import { Mathesis, type ModelRefInput } from "./rpc.ts"
 
 type Context = Plugin.Context
 type FormSpec = { id: string; title: string; fields: unknown[]; metadata?: Record<string, unknown> }
 
 const FORM_PREFIX = "frm_mathesis_"
+const PANEL = "mathesis.panel"
+const DUE_REFRESH_MS = 10 * 60 * 1000
 const errorText = (error: unknown) =>
   error && typeof error === "object" && "message" in error ? String((error as { message: unknown }).message) : String(error)
 
@@ -78,10 +83,17 @@ export default Plugin.define({
       }
     }
 
+    // Bumped on every server event that can change what the panel and the footer show.
+    const [tick, bump] = createSignal(0)
+    const changed = () => void bump((n) => n + 1)
+
     /** Subscriptions to the server's events. They belong to one client, so they are renewed when the server restarts. */
     function subscribe(): Array<() => void> {
       return [
+        rpc().events.on("planUpdated", changed),
+        rpc().events.on("sessionChanged", changed),
         rpc().events.on("questionAsked", (event) => {
+          changed()
           void claimAndShow((event.data as { questionID: string }).questionID, locationOf(event)).catch((error) =>
             context.ui.toast.show({ title: "Mathesis", message: `Could not show the question: ${errorText(error)}`, variant: "error" }),
           )
@@ -89,12 +101,15 @@ export default Plugin.define({
         rpc().events.on("questionClosed", (event) => {
           const { reason, sessionID, formID } = event.data as { reason: string; sessionID: string; formID: string }
           formLocations.delete(formID)
+          changed()
           if (reason === "aborted" || reason === "fallback") {
             void context.client.session.form.cancel({ sessionID, formID, message: "The question was closed." }).catch(() => {})
           }
         }),
         rpc().events.on("cardsChanged", (event) => {
           for (const id of (event.data as { added: string[] }).added) context.ui.toast.show({ message: `+1 card: ${id}`, variant: "success", duration: 3000 })
+          changed()
+          void refreshDue().catch(() => {})
         }),
       ]
     }
@@ -105,6 +120,8 @@ export default Plugin.define({
         subscriptions.forEach((off) => off())
         subscriptions = subscribe()
         void recover().catch(() => {})
+        changed()
+        void refreshDue({ notify: true }).catch(() => {})
       }),
       // Relay form outcomes too; the server also watches them, and the first one wins.
       context.data.on("form.replied", (event) => {
@@ -157,7 +174,7 @@ export default Plugin.define({
           ...topics.map((t) => ({
             title: t.goal,
             value: t.id,
-            description: `${t.ideas} cards${t.due ? `, ${t.due} due` : ""}`,
+            description: `${t.ideas} card${t.ideas === 1 ? "" : "s"}${t.due ? `, ${t.due} due` : ""}`,
             category: "Continue",
           })),
         ],
@@ -166,6 +183,17 @@ export default Plugin.define({
       if (choice !== NEW) return start({ kind: "learn", topic: choice })
       const typed = await context.ui.dialog.prompt({ title: "What do you want to understand?", placeholder: "how binary search finds its bounds" })
       if (typed?.trim()) return start({ kind: "learn", goal: typed.trim() })
+    }
+
+    const topicArg = (input: string | undefined) => (input?.trim() ? input.trim() : undefined)
+
+    async function showStatus() {
+      try {
+        const result = (await rpc().status({}, at())) as { text: string }
+        await context.ui.dialog.alert({ title: "Mathesis", message: result.text })
+      } catch (error) {
+        context.ui.toast.show({ title: "Mathesis", message: errorText(error), variant: "error" })
+      }
     }
 
     async function setupCommand() {
@@ -216,6 +244,117 @@ export default Plugin.define({
       }
     }
 
+    // Due count for the footer and sidebar, refreshed on card changes, on reconnect and every few minutes.
+    const [due, setDue] = createSignal(0)
+    const [notified, setNotified] = context.storage.store("notify", { initial: { last: "" } })
+    let notifying = false
+    const reviewing = () => {
+      const route = context.ui.router.current()
+      return route.type === "session" && !!context.data.session.get(route.sessionID)?.title?.startsWith("Mathesis: review")
+    }
+    async function refreshDue(options: { notify?: boolean } = {}) {
+      const { due: count } = (await rpc().due({}, at())) as { due: number }
+      setDue(count)
+      // One system notification a day while cards are due and the terminal is not focused (option `notify`). Only
+      // from the timer, startup and reconnect, never in the middle of a review. The day is claimed before sending.
+      const today = localDate(new Date())
+      if (!options.notify || notifying) return
+      if (!shouldNotify({ due: count, last: notified.last, today, enabled: context.options.notify !== false, reviewing: reviewing() })) return
+      notifying = true
+      const previous = notified.last
+      try {
+        await setNotified((draft) => void (draft.last = today))
+        const sent = await context.attention.notify({
+          title: "Mathesis",
+          message: `${count} card${count === 1 ? "" : "s"} due. Run /recall.`,
+          notification: { when: "blurred" },
+        })
+        // Skipped (for example because the terminal is focused): give the day back, the next check tries again.
+        if (!sent.notification) await setNotified((draft) => void (draft.last = previous))
+      } finally {
+        notifying = false
+      }
+    }
+    void refreshDue({ notify: true }).catch(() => {})
+    const timer = setInterval(() => {
+      changed()
+      void refreshDue({ notify: true }).catch(() => {})
+    }, DUE_REFRESH_MS)
+    stops.push(() => clearInterval(timer))
+
+    const dueText = () => `Mathesis: ${due()} due`
+    stops.push(
+      context.ui.slot({
+        append: "home.footer.status",
+        render: () => (
+          <Show when={due() > 0}>
+            <text fg={context.theme.text.muted}>{dueText()}</text>
+          </Show>
+        ),
+      }),
+      context.ui.slot({
+        append: "sidebar.content",
+        render: () => (
+          <Show when={due() > 0}>
+            <text fg={context.theme.text.muted}>{dueText()} · /recall</text>
+          </Show>
+        ),
+      }),
+      context.ui.slot({
+        append: "session.panel",
+        render: (input) => (
+          <Show when={input.name === PANEL}>
+            <MathesisPanel input={input} />
+          </Show>
+        ),
+      }),
+    )
+
+    type Row = { depth: number; text: string; tone?: "heading" | "muted" | "current" }
+
+    /** The side panel: phase, the plan as an indented dependency list with the current node, and the due cards. */
+    function MathesisPanel(props: { input: PanelInput }) {
+      const [view, setView] = createSignal<{ title: string; rows: Row[] }>({ title: "Mathesis", rows: [{ depth: 0, text: "Loading…" }] })
+      let request = 0
+      // Reload when the session changes or the server reports a change; a late answer to an older request is dropped.
+      createEffect(
+        on([() => props.input.sessionID, tick], ([sessionID]) => {
+          const id = ++request
+          const location = context.data.session.get(sessionID)?.location as Location | undefined
+          void rpc()
+            .panel({ sessionID }, at(location))
+            .then((result) => id === request && setView(result as { title: string; rows: Row[] }))
+            .catch((error) => id === request && setView({ title: "Mathesis", rows: [{ depth: 0, text: `Could not load: ${errorText(error)}` }] }))
+        }),
+      )
+      const color = (tone?: Row["tone"]) =>
+        tone === "current" ? context.theme.text.action.primary.base : tone === "muted" ? context.theme.text.muted : context.theme.text.base
+      return (
+        <box flexDirection="column" paddingLeft={1} paddingRight={1} flexGrow={1}>
+          <text fg={context.theme.text.action.primary.base}>
+            <b>{view().title}</b>
+          </text>
+          <scrollbox focused={props.input.focused} flexGrow={1}>
+            <For each={view().rows}>
+              {(row) => (
+                // One text per row inside an indented box, so wrapped lines keep the indentation.
+                <box paddingLeft={row.depth * 2}>
+                  <text fg={color(row.tone)}>{row.tone === "heading" ? <b>{row.text}</b> : row.text || " "}</text>
+                </box>
+              )}
+            </For>
+          </scrollbox>
+        </box>
+      )
+    }
+
+    function togglePanel() {
+      const route = context.ui.router.current()
+      const current = context.ui.panel.current()
+      if (current?.name === PANEL && route.type === "session" && current.sessionID === route.sessionID) return context.ui.panel.close()
+      if (!context.ui.panel.open(PANEL)) context.ui.toast.show({ message: "Open a session first.", variant: "info" })
+    }
+
     context.keymap.layer(() => ({
       mode: "global",
       commands: [
@@ -228,6 +367,48 @@ export default Plugin.define({
           run: (input) => learn(input),
         },
         {
+          id: "mathesis.recall",
+          title: "Mathesis: spaced review of due cards",
+          group: "Mathesis",
+          palette: true,
+          slash: { name: "recall", arguments: true },
+          run: async (input) => {
+            const topic = topicArg(input)
+            if (!topic) {
+              const count = (await rpc().due({}, at()).catch(() => undefined)) as { due: number } | undefined
+              if (count?.due === 0) return context.ui.toast.show({ title: "Mathesis", message: "No cards are due.", variant: "info" })
+            }
+            return start({ kind: "recall", topic })
+          },
+        },
+        {
+          id: "mathesis.practice",
+          title: "Mathesis: practice with what you hold",
+          group: "Mathesis",
+          palette: true,
+          slash: { name: "practice", arguments: true },
+          run: (input) => start({ kind: "practice", topic: topicArg(input) }),
+        },
+        {
+          id: "mathesis.status",
+          title: "Mathesis: status",
+          group: "Mathesis",
+          palette: true,
+          slash: { name: "mathesis", arguments: true },
+          // `/mathesis panel` toggles the side panel; `/mathesis` shows the status.
+          run: (input) => (input?.trim() === "panel" ? togglePanel() : showStatus()),
+        },
+        {
+          id: "mathesis.panel",
+          title: "Mathesis: toggle the side panel",
+          group: "Mathesis",
+          palette: true,
+          slash: { name: "mathesis-panel" },
+          // Bind a key with the plugin option `panelKey` (for example "ctrl+x m"), or through the keybind config by id.
+          ...(typeof context.options.panelKey === "string" ? { bind: context.options.panelKey } : {}),
+          run: () => togglePanel(),
+        },
+        {
           id: "mathesis.setup",
           title: "Mathesis: setup",
           group: "Mathesis",
@@ -236,6 +417,7 @@ export default Plugin.define({
           run: () => setupCommand(),
         },
       ],
+      bindings: ["mathesis.panel"],
     }))
 
     return () => stops.forEach((stop) => stop())

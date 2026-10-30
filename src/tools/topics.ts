@@ -2,7 +2,7 @@ import type { Phase } from "../phases.ts"
 
 const LEARN_PHASES = ["probe", "teach"] as const
 import { renderPlanTree, type NodeMark } from "../plan.ts"
-import { dueLabel, ideaState, Refusal, topicIdeas, topicPlan, type Runtime } from "../runtime.ts"
+import { cardCount, dueLabel, ideaState, Refusal, topicIdeas, topicPlan, type Runtime } from "../runtime.ts"
 import { isDue } from "../srs/fsrs.ts"
 import { setPhase, updateSession, type SessionState } from "../state.ts"
 import { isSlug, slugify, type Idea } from "../store/vault.ts"
@@ -121,7 +121,7 @@ export const topicTools: ToolSpec[] = [
       const lines = topics.map((topic) => {
         const own = topicIdeas(topic, ideas)
         const due = own.filter((idea) => isDue(idea.srs, now)).length
-        return `- \`${topic.id}\`: ${topic.goal} (${own.length} cards, ${due} due${topicPlan(topic) ? "" : ", no plan yet"})`
+        return `- \`${topic.id}\`: ${topic.goal} (${cardCount(own.length)}, ${due} due${topicPlan(topic) ? "" : ", no plan yet"})`
       })
       for (const error of errors) lines.push(`- (unreadable) ${error.file}: ${error.message}`)
       return lines.join("\n")

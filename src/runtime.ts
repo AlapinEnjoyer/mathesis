@@ -17,6 +17,7 @@ export interface Runtime {
   events: {
     planUpdated(data: { sessionID: string; topic: string }): void
     cardsChanged(data: { sessionID?: string; added: string[]; updated: string[] }): void
+    sessionChanged?(data: { sessionID: string }): void
   }
   /** Renames a session (for sessions started by talking to the agent). Optional outside opencode. */
   renameSession?: (sessionID: string, title: string) => Promise<void>
@@ -56,3 +57,6 @@ export function topicIdeas(topic: Topic, ideas: readonly Idea[]): Idea[] {
   const listed = new Set(topic.ideas)
   return ideas.filter((idea) => listed.has(idea.id) || idea.topic === topic.id)
 }
+
+/** "1 card", "3 cards". */
+export const cardCount = (n: number) => `${n} card${n === 1 ? "" : "s"}`

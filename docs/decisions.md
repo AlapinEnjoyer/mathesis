@@ -91,3 +91,32 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **TUI calls go to the location of the event**, and the TUI subscribes again after `server.connected`.
 - **Not verified yet:** whether the TUI sends its own selected model with the learner's next message in a session
   that Mathesis created with another model (that would switch the model mid-session).
+
+## Phase 3 (spaced review)
+
+- **Review is bound to the served card.** `review_next` sets the session's current card; review questions and
+  `review_grade` must be about it, so the model cannot grade another card, an undue card, or one card twice.
+- **Grading is atomic per card** (`Vault.updateSrs` under the note's lock). The answer is released only if nothing
+  was written; once the card is rescheduled the review counts even if a later write fails.
+- **"Due" for people means due today** (before the end of the learner's local day): `/recall`, the footer, the panel
+  and `review_next` use it, so a card due at 20:00 comes up in the morning. FSRS and the rebuild use exact times.
+- **A lapse** is an Again on a card that had been reviewed before. It is logged with `lapse: true` (status counts only
+  these). Its direct foundations become due now, unless they were reviewed today; for a misconception card the ideas
+  it corrupts (`about`) are pulled instead of `requires`.
+- **A dismissed review question skips the card for the session** without changing its schedule; its wording counts as
+  asked before.
+- **A misconception recorded without a session topic** takes the topic of the idea it corrupts.
+
+## Phase 4 (practice)
+
+- **A practice problem is a series of attempts**, each a form. "I don't know" or a wrong attempt is a request for a
+  hint, not a logged miss; the agent records the concluded problem once with `practice_record` (last attempt, highest
+  hint rung `none`/`R0`–`R5`, miss type). The log keeps `hints` and `miss`; ratings use the §5.3 table but are not
+  scheduled.
+- **Targets rank by current weakness** (time since the last review over stability), misconceptions first while not
+  stable, most-served foundations on ties, and cards practised in the last day at the back, so each session differs.
+  `practice_targets` shows the full card content, this session's outcomes per target and what to retest.
+- **The practice cap is `reviewCap`** (default 20 problems). After a problem the agent continues in the same turn; the
+  learner pauses by dismissing a form.
+- **The practice phase uses the four modes as question types** (`recall`, `discrimination`, `reverse`,
+  `composition`); misconception targets use `discrimination`.

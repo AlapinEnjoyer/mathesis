@@ -4,17 +4,21 @@ import { promptCache } from "./compose.ts"
 import { resolveConfig } from "./config.ts"
 import { Mathesis, type SetupInput, type StartInput } from "./rpc.ts"
 import type { Runtime } from "./runtime.ts"
+import { panel } from "./panel.ts"
 import { AGENT_NAME, setup, startSession } from "./sessions.ts"
+import { status } from "./status.ts"
 import { getSession } from "./state.ts"
 import { Vault } from "./store/vault.ts"
-import { isDue } from "./srs/fsrs.ts"
+import { isDueToday } from "./srs/fsrs.ts"
 import { NAMESPACE, registerTools } from "./tools/define.ts"
+import { practiceTools } from "./tools/practice.ts"
 import { noteLearnerReply, questionTools } from "./tools/questions.ts"
+import { reviewTools } from "./tools/review.ts"
 import { teachTools } from "./tools/teach.ts"
 import { topicTools } from "./tools/topics.ts"
 import { topicIdeas } from "./runtime.ts"
 
-type Emit = <N extends "questionAsked" | "questionClosed" | "planUpdated" | "cardsChanged">(name: N, data: Record<string, unknown>) => void
+type Emit = <N extends "questionAsked" | "questionClosed" | "planUpdated" | "cardsChanged" | "sessionChanged">(name: N, data: Record<string, unknown>) => void
 
 export default Plugin.define({
   id: "mathesis",
@@ -43,6 +47,7 @@ export default Plugin.define({
       events: {
         planUpdated: (data) => emit("planUpdated", data),
         cardsChanged: (data) => emit("cardsChanged", data),
+        sessionChanged: (data) => emit("sessionChanged", data),
       },
       renameSession: async (sessionID, title) => {
         const session = await ctx.session.get({ sessionID })
@@ -83,10 +88,16 @@ export default Plugin.define({
         return {
           topics: topics.map((topic) => {
             const own = topicIdeas(topic, ideas)
-            return { id: topic.id, goal: topic.goal, ideas: own.length, due: own.filter((i) => isDue(i.srs, now)).length }
+            return { id: topic.id, goal: topic.goal, ideas: own.length, due: own.filter((i) => isDueToday(i.srs, now)).length }
           }),
         }
       },
+      status: async () => status(rt),
+      due: async () => {
+        const { ideas } = await vault.listIdeas()
+        return { due: ideas.filter((idea) => isDueToday(idea.srs, rt.now())).length }
+      },
+      panel: async (input) => panel(rt, (input as { sessionID: string }).sessionID),
       setup: async (input) => setup(rt, (input ?? {}) as SetupInput),
     })
     emit = (name, data) => void registration.events.emit(name as never, data as never).catch(() => {})
@@ -123,7 +134,7 @@ export default Plugin.define({
       if (event.tool === "question" && event.status === "completed") await noteLearnerReply(rt, event.sessionID)
     })
 
-    await ctx.tool.transform((editor) => registerTools(editor, rt, [...topicTools, ...questionTools, ...teachTools]))
+    await ctx.tool.transform((editor) => registerTools(editor, rt, [...topicTools, ...questionTools, ...teachTools, ...reviewTools, ...practiceTools]))
 
     return () => {
       stop.abort()

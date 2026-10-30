@@ -49,13 +49,19 @@ export function registerTools(editor: ToolEditor, rt: Runtime, specs: readonly T
       description: spec.description,
       input: spec.input,
       options: { namespace: NAMESPACE, codemode: false },
-      execute: async (input, context) => ({
-        content: await runTool(spec, rt, input, {
-          sessionID: context.sessionID,
-          signal: context.signal,
-          progress: (metadata) => context.progress(metadata),
-        }),
-      }),
+      execute: async (input, context) => {
+        try {
+          return {
+            content: await runTool(spec, rt, input, {
+              sessionID: context.sessionID,
+              signal: context.signal,
+              progress: (metadata) => context.progress(metadata),
+            }),
+          }
+        } finally {
+          rt.events.sessionChanged?.({ sessionID: context.sessionID })
+        }
+      },
     })
   }
 }

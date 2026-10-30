@@ -28,7 +28,8 @@ export async function useAnswer(
   sessionID: string,
   questionID: string | undefined,
   usedBy: (record: AnswerRecord) => string,
-  check: (record: AnswerRecord) => void = () => {},
+  /** May refuse (throw), and may return fields to store on the answer, e.g. the agent's verdict on free recall. */
+  check: (record: AnswerRecord, state: SessionState) => Partial<AnswerRecord> | void = () => {},
 ): Promise<{ record: AnswerRecord; release: () => Promise<void> }> {
   let claimed: AnswerRecord | undefined
   let tag = ""
@@ -36,11 +37,11 @@ export async function useAnswer(
     rt.store,
     sessionID,
     (current) => {
-      const record = findAnswer(current, questionID)
-      check(record)
+      const found = findAnswer(current, questionID)
+      const record = { ...found, ...(check(found, current) ?? {}) }
       tag = usedBy(record)
       claimed = record
-      return { answers: current.answers!.map((a) => (a.questionID === record.questionID ? { ...a, usedBy: tag } : a)) }
+      return { answers: current.answers!.map((a) => (a.questionID === record.questionID ? { ...record, usedBy: tag } : a)) }
     },
     rt.now(),
   )
@@ -179,6 +180,8 @@ export const teachTools: ToolSpec[] = [
           } else correct = oneOf(input, "verdict", ["correct", "partial"] as const) === "partial" ? "partial" : true
           id = requested ?? record.nodeId ?? ""
           if (!id) throw new Refusal("give a card `id` (lowercase slug), or ask checks with a nodeId.")
+          // Keep the agent's verdict on the answer, so later tools see it (e.g. misconception evidence).
+          return record.kind === "explain" ? { correct: correct === true } : undefined
         },
       )
       try {
@@ -279,10 +282,13 @@ export const teachTools: ToolSpec[] = [
       const grade: Grade = "again"
       const existing = await rt.vault.readIdea(id)
       if (existing && existing.kind !== "misconception") throw new Refusal(`\`${id}\` is an idea card, not a misconception; choose another id.`)
+      // Without a session topic (an all-topics review or practice), the card takes the topic of the idea it corrupts.
+      let topic = state.topic
+      for (const target of about) topic ??= (await rt.vault.readIdea(target).catch(() => undefined))?.topic
       const { created } = await rt.vault.upsertIdea(
         {
           id,
-          ...(state.topic ? { topic: state.topic } : {}),
+          ...(topic ? { topic } : {}),
           kind: "misconception",
           about,
           claim: right,
@@ -307,9 +313,15 @@ export const teachTools: ToolSpec[] = [
         ...(record?.confidence !== undefined ? { confidence: record.confidence } : {}),
         rating: grade,
       })
-      if (state.topic) await rt.vault.updateTopic(state.topic, { addIdeas: [id] }, now)
+      if (topic && (await rt.vault.readTopic(topic).catch(() => undefined))) await rt.vault.updateTopic(topic, { addIdeas: [id] }, now)
       rt.events.cardsChanged({ sessionID: call.sessionID, added: created ? [id] : [], updated: created ? [] : [id] })
-      return `${created ? "Misconception card created" : "Misconception card bumped"}: \`${id}\`. Now repair it in the teaching.`
+      const next =
+        state.phase === "probe"
+          ? "Continue the probe; dig into its extent."
+          : state.phase === "teach"
+            ? "Now repair it in the teaching."
+            : "Correct it surgically in one or two sentences; it comes back as a discrimination question."
+      return `${created ? "Misconception card created" : "Misconception card bumped"}: \`${id}\`. ${next}`
     },
   },
 ]
