@@ -13,6 +13,12 @@ edge of what you already understand, and then keeps it in your memory with space
 
 Everything you learn is plain Markdown in a folder (default `~/mathesis`) that you can read and edit in any editor.
 
+> **Disclaimer: this is a heavily AI-assisted port.** Mathesis ports the learning method of
+> [LearnHarness](https://github.com/amosblomqvist/learnharness) to opencode and adds spaced repetition. The design and
+> the decisions are the maintainer's, but most of the code, prompts, tests and documents were written by an AI model
+> (Claude, in Claude Code), reviewed by separate AI review agents and checked by hand in the opencode TUI. It is early
+> software: expect rough edges, read `docs/history.md` for what was and was not verified, and please report problems.
+
 ## Requirements
 
 - opencode 2.2.1 or a later 2.x release (the v2 plugin API), with the terminal UI.
@@ -122,7 +128,11 @@ provider you use in opencode.
 ## Development
 
 `bun install`, `bun test`, `bun run typecheck`. See `AGENTS.md` for how to test in the TUI, `docs/decisions.md` for the
-design decisions and `docs/spike.md` for what the opencode API does in practice.
+design decisions, `docs/spike.md` for what the opencode API does in practice, and `docs/history.md` for how Mathesis
+was built and what is still open.
+
+Use a separate checkout for daily use: opencode loads the plugin from the folder, and a half-finished change there can
+make it fail to load until `opencode service restart`.
 
 ## License
 
