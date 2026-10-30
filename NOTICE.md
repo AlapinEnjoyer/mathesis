@@ -1,5 +1,7 @@
 # Notice
 
+Copyright (C) 2026 AlapinEnjoyer and Mathesis contributors.
+
 Mathesis is licensed under the GNU Affero General Public License v3.0 (see `LICENSE`).
 
 ## LearnHarness

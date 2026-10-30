@@ -13,6 +13,28 @@ All your data is plain Markdown in a folder (default `~/mathesis`).
 
 > Status: early development. Not published yet.
 
+## Requirements
+
+- opencode 2.2.1 or later 2.x (the v2 plugin API)
+- Bun, which opencode uses to load plugins
+
+## Install (from a local checkout, for now)
+
+```bash
+git clone https://github.com/AlapinEnjoyer/mathesis
+cd mathesis && bun install
+```
+
+Add the absolute path of the checkout to `plugins` in `~/.config/opencode/opencode.jsonc` and restart opencode:
+
+```jsonc
+{
+  "plugins": [
+    { "package": "/path/to/mathesis", "options": { "vault": "~/mathesis" } }
+  ]
+}
+```
+
 ## License
 
 AGPL-3.0. Mathesis adapts work from [LearnHarness](https://github.com/amosblomqvist/learnharness) by Amos Blomqvist.

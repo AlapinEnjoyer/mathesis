@@ -13,6 +13,12 @@ Phase-0 findings about the real opencode API are in `docs/spike.md`; they win ov
 ## Load locally
 Add the absolute repo path to `plugins` in `~/.config/opencode/opencode.jsonc`, then restart opencode.
 
+## Test in opencode
+- Run `opencode --standalone` from the repo (a private server, so the user's background service is not touched),
+  for example in a detached tmux session driven with `send-keys` and `capture-pane`.
+- Token usage per step (prompt-cache checks): `opencode api --standalone GET /api/session/<id>/message`.
+- Free test models are listed by `opencode models`.
+
 ## Conventions
 - TypeScript source is shipped as is (no build step). Import local files with the `.ts` extension.
 - Learner data is plain Markdown in the vault. Re-read files on every use; keep unknown frontmatter keys and
