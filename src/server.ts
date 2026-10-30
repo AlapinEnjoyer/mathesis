@@ -18,7 +18,7 @@ import { teachTools } from "./tools/teach.ts"
 import { topicTools } from "./tools/topics.ts"
 import { topicIdeas } from "./runtime.ts"
 
-type Emit = <N extends "questionAsked" | "questionClosed" | "planUpdated" | "cardsChanged">(name: N, data: Record<string, unknown>) => void
+type Emit = <N extends "questionAsked" | "questionClosed" | "planUpdated" | "cardsChanged" | "sessionChanged">(name: N, data: Record<string, unknown>) => void
 
 export default Plugin.define({
   id: "mathesis",
@@ -47,6 +47,7 @@ export default Plugin.define({
       events: {
         planUpdated: (data) => emit("planUpdated", data),
         cardsChanged: (data) => emit("cardsChanged", data),
+        sessionChanged: (data) => emit("sessionChanged", data),
       },
       renameSession: async (sessionID, title) => {
         const session = await ctx.session.get({ sessionID })
@@ -92,6 +93,10 @@ export default Plugin.define({
         }
       },
       status: async () => status(rt),
+      due: async () => {
+        const { ideas } = await vault.listIdeas()
+        return { due: ideas.filter((idea) => isDue(idea.srs, rt.now())).length }
+      },
       panel: async (input) => panel(rt, (input as { sessionID: string }).sessionID),
       setup: async (input) => setup(rt, (input ?? {}) as SetupInput),
     })

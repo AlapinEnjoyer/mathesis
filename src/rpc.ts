@@ -97,10 +97,21 @@ export const Mathesis = Rpc.define({
       input: obj({}),
       output: obj({ due: { type: "number" }, cards: { type: "number" }, text: str }, ["due", "cards", "text"]),
     },
-    /** The side panel's text for a session. */
+    /** The side panel for a session: a title and rows (depth for indentation, text). */
     panel: {
       input: obj({ sessionID: str }, ["sessionID"]),
-      output: obj({ title: str, text: str }, ["title", "text"]),
+      output: obj(
+        {
+          title: str,
+          rows: { type: "array", items: obj({ depth: { type: "number" }, text: str, tone: str }, ["depth", "text"]) },
+        },
+        ["title", "rows"],
+      ),
+    },
+    /** Only the number of due cards (cheap; for the footer). */
+    due: {
+      input: obj({}),
+      output: obj({ due: { type: "number" } }, ["due"]),
     },
     /** Writes the agent file and the vault folders; stores the model choice. */
     setup: {
@@ -125,6 +136,8 @@ export const Mathesis = Rpc.define({
       ),
     },
     planUpdated: { schema: obj({ sessionID: str, topic: str }, ["sessionID", "topic"]) },
+    /** A Mathesis tool ran in this session (its phase, topic or progress may have changed). */
+    sessionChanged: { schema: obj({ sessionID: str }, ["sessionID"]) },
     cardsChanged: {
       schema: obj({ sessionID: str, added: { type: "array", items: str }, updated: { type: "array", items: str } }, [
         "added",

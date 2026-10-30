@@ -453,20 +453,31 @@ describe("practice", () => {
 })
 
 describe("panel", () => {
-  test("shows the phase, the plan with marks and the due cards", async () => {
+  const text = (view: Awaited<ReturnType<typeof panel>>) => view.rows.map((r) => `${"  ".repeat(r.depth)}${r.text}`).join("\n")
+
+  test("shows the phase, the plan with titles and marks, and the cards due now", async () => {
     await toTeach()
+    await call("plan_set", { mermaid: 'graph TD\n  sorted["Sorted `a`"] --> interval["Half-open interval"]\n  interval --> bounds["Lower bound"]\n  extra["Extra root"] --> bounds' })
     reply = () => ({ answer: "0", confidence: "90" })
     await call("idea_upsert", { questionID: lastQuestionID(await call("quiz", quiz())), claim: "c", why: "w" })
     const view = await panel(rt, SESSION)
     expect(view.title).toBe("Mathesis: how binary search finds its bounds")
-    expect(view.text).toContain("Phase: teach")
-    expect(view.text).toContain("· Sorted array\n  ▶ Half-open interval")
-    expect(view.text).toContain("No cards due.")
+    expect(text(view)).toContain("Phase: teach")
+    expect(text(view)).toContain("· Sorted `a`\n· Extra root\n  ▶ Half-open interval  ← Sorted `a`\n    · Lower bound  ← Half-open interval, Extra root")
+    expect(view.rows.find((r) => r.text.startsWith("▶"))?.tone).toBe("current")
+    expect(text(view)).toContain("No cards due now.")
     clock = new Date("2027-01-01T10:00:00.000Z")
     await rt.store.set(`session/${SESSION}`, { ...(await getSession(rt.store, SESSION))!, currentNode: "bounds" })
-    const later = await panel(rt, SESSION)
-    expect(later.text).toContain("↻ Half-open interval")
-    expect(later.text).toContain("Due (1)\n  ↻ interval (overdue by")
-    expect((await panel(rt, "unknown")).text).toContain("not a Mathesis session")
+    const later = text(await panel(rt, SESSION))
+    expect(later).toContain("↻ Half-open interval")
+    expect(later).toContain("Due now: 1 card\n  ↻ interval (overdue by")
+    expect(text(await panel(rt, "unknown"))).toContain("Not a Mathesis session")
+  })
+
+  test("more than ten due cards are summarized", async () => {
+    for (let i = 0; i < 12; i++) await rt.vault.upsertIdea({ id: `card-${i}`, claim: "c", srs: fsrsReview(undefined, "good", new Date("2026-01-01T00:00:00Z")) }, clock)
+    const view = text(await panel(rt, "unknown"))
+    expect(view).toContain("Due now: 12 cards")
+    expect(view).toContain("… and 2 more")
   })
 })
