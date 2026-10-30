@@ -106,7 +106,7 @@ export const reviewTools: ToolSpec[] = [
       ["questionID"],
     ),
     async run(input, call, rt) {
-      let correct: boolean | "partial" = false
+      let correct = false as boolean | "partial"
       const { record, release } = await useAnswer(
         rt,
         call.sessionID,

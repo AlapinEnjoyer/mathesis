@@ -256,6 +256,14 @@ export default Plugin.define({
           },
         },
         {
+          id: "mathesis.practice",
+          title: "Mathesis: practice with what you hold",
+          group: "Mathesis",
+          palette: true,
+          slash: { name: "practice", arguments: true },
+          run: async (input) => start({ kind: "practice", topic: await topicArg(input) }),
+        },
+        {
           id: "mathesis.status",
           title: "Mathesis: status",
           group: "Mathesis",

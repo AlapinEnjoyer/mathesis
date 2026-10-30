@@ -11,12 +11,13 @@ import { status } from "../src/status.ts"
 import { readLog } from "../src/store/log.ts"
 import { Vault } from "../src/store/vault.ts"
 import { runTool, type ToolSpec } from "../src/tools/define.ts"
+import { practiceTools, rankTargets } from "../src/tools/practice.ts"
 import { noteLearnerReply, questionTools } from "../src/tools/questions.ts"
 import { pickNext, reviewTools, suggestMode } from "../src/tools/review.ts"
 import { teachTools } from "../src/tools/teach.ts"
 import { topicTools } from "../src/tools/topics.ts"
 
-const tools = new Map([...topicTools, ...questionTools, ...teachTools, ...reviewTools].map((t) => [t.name, t] as [string, ToolSpec]))
+const tools = new Map([...topicTools, ...questionTools, ...teachTools, ...reviewTools, ...practiceTools].map((t) => [t.name, t] as [string, ToolSpec]))
 const SESSION = "ses_test"
 let root: string
 let rt: Runtime
@@ -402,5 +403,50 @@ describe("spaced review", () => {
     expect(result.cards).toBe(4)
     expect(result.text).toContain("calculus: 2 cards, 2 due")
     expect(result.text).toContain("networking: 2 cards, 1 due")
+  })
+})
+
+describe("practice", () => {
+  beforeEach(async () => {
+    const day = 86_400_000
+    const at = (d: number) => new Date(clock.getTime() - d * day)
+    let slope = fsrsReview(undefined, "good", at(60))
+    slope = fsrsReview(slope, "good", new Date(slope.due))
+    await rt.vault.upsertIdea({ id: "slope", topic: "calculus", claim: "slope", srs: slope }, clock)
+    await rt.vault.upsertIdea({ id: "chain-rule", topic: "calculus", claim: "chain", requires: ["slope"], srs: fsrsReview(undefined, "hard", at(2)) }, clock)
+    await rt.vault.upsertIdea({ id: "product-rule", topic: "calculus", claim: "product", requires: ["slope"], srs: fsrsReview(undefined, "good", at(2)) }, clock)
+    await rt.vault.upsertIdea({ id: "never-reviewed", topic: "calculus", claim: "new" }, clock)
+    await setPhase(rt.store, SESSION, "practice", {}, clock)
+  })
+
+  test("targets: held cards only, weakest first", async () => {
+    const { ideas } = await rt.vault.listIdeas()
+    expect(rankTargets(ideas).map((i) => i.id)).toEqual(["chain-rule", "product-rule", "slope"])
+    const result = await call("practice_targets")
+    expect(result).toContain("3 targets")
+    expect(result.indexOf("`chain-rule`")).toBeLessThan(result.indexOf("`slope`"))
+    expect(result).not.toContain("never-reviewed")
+  })
+
+  test("outcomes are logged but do not change the schedule; two misses advise a switch", async () => {
+    const before = (await rt.vault.readIdea("chain-rule"))!.srs
+    reply = () => ({ answer: "1", confidence: "60" })
+    const ask = () => call("quiz", { question: `Problem ${Math.random()}`, options: ["a", "b"], answerKey: { explanation: "e", correctIndex: 0 }, type: "composition", ideaId: "chain-rule" })
+    const first = await call("practice_record", { questionID: lastQuestionID(await ask()), miss: "discrimination" })
+    expect(first).toContain("missed, discrimination miss")
+    expect(first).toContain("one notch easier")
+    const second = await call("practice_record", { questionID: lastQuestionID(await ask()) })
+    expect(second).toContain("Second miss on this target")
+    expect((await rt.vault.readIdea("chain-rule"))!.srs).toEqual(before)
+    const log = (await readLog(rt.vault.logPath)).entries
+    expect(log.every((e) => e.mode === "practice" && !e.scheduled)).toBe(true)
+    expect((await getSession(rt.store, SESSION))?.done).toEqual(["chain-rule", "chain-rule"])
+  })
+
+  test("review tools are refused in practice, practice tools outside it", async () => {
+    expect(await call("review_next")).toContain("not available in the practice phase")
+    await setPhase(rt.store, "other", "review", {}, clock)
+    const result = await runTool(tools.get("practice_targets")!, rt, {}, { sessionID: "other", signal: new AbortController().signal, progress: async () => {} })
+    expect(result).toContain("not available in the review phase")
   })
 })

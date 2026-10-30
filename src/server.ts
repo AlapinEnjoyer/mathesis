@@ -10,6 +10,7 @@ import { getSession } from "./state.ts"
 import { Vault } from "./store/vault.ts"
 import { isDue } from "./srs/fsrs.ts"
 import { NAMESPACE, registerTools } from "./tools/define.ts"
+import { practiceTools } from "./tools/practice.ts"
 import { noteLearnerReply, questionTools } from "./tools/questions.ts"
 import { reviewTools } from "./tools/review.ts"
 import { teachTools } from "./tools/teach.ts"
@@ -126,7 +127,7 @@ export default Plugin.define({
       if (event.tool === "question" && event.status === "completed") await noteLearnerReply(rt, event.sessionID)
     })
 
-    await ctx.tool.transform((editor) => registerTools(editor, rt, [...topicTools, ...questionTools, ...teachTools, ...reviewTools]))
+    await ctx.tool.transform((editor) => registerTools(editor, rt, [...topicTools, ...questionTools, ...teachTools, ...reviewTools, ...practiceTools]))
 
     return () => {
       stop.abort()
