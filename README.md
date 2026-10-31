@@ -26,7 +26,8 @@ Everything you learn is plain Markdown in a folder (default `~/mathesis`) that y
 
 ## Install
 
-Add the package to `plugins` in `~/.config/opencode/opencode.jsonc` and restart opencode:
+Run `opencode plugin add opencode-mathesis`, or add the package to `plugins` in `~/.config/opencode/opencode.jsonc`
+yourself, then restart opencode:
 
 ```jsonc
 {
