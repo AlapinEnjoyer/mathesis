@@ -5,7 +5,7 @@ import { renderPlanTree, type NodeMark } from "../plan.ts"
 import { cardCount, dueLabel, ideaState, Refusal, topicIdeas, topicPlan, type Runtime } from "../runtime.ts"
 import { isDue } from "../srs/fsrs.ts"
 import { setPhase, updateSession, type SessionState } from "../state.ts"
-import { isSlug, slugify, type Idea } from "../store/vault.ts"
+import { isSlug, slugify, topicSlug, type Idea } from "../store/vault.ts"
 import { oneOf, schema, text, type ToolSpec } from "./define.ts"
 
 const firstLine = (value: string) => value.split("\n").find((line) => line.trim())?.trim() ?? ""
@@ -96,7 +96,7 @@ export const topicTools: ToolSpec[] = [
         // The session already has a topic (for example from /learn): never create a second one from a reworded goal.
         return `This session already works on the topic \`${call.state.topic}\` (phase ${call.state.phase}). Continue it. To switch to another topic, pass its id as \`topic\` (a new id starts a new topic).\n\n${await statusText(rt, call.state)}`
       }
-      const id = requested ? (isSlug(requested) ? requested : slugify(requested, 40)) : slugify(goal, 40)
+      const id = requested ? (isSlug(requested) ? requested : slugify(requested, 40)) : topicSlug(goal)
       if (call.state && (call.state.phase === "review" || call.state.phase === "practice")) {
         throw new Refusal(`this is a ${call.state.phase} session. Ask the learner to start a new session with /learn.`)
       }

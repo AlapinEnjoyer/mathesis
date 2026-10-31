@@ -85,7 +85,7 @@ function fallbackText(question: OpenQuestion): string {
   const lines = [
     "fallback: true",
     `questionID: ${question.questionID}`,
-    "No Mathesis form could be shown to the learner (no Mathesis TUI attached). Ask the same question another way:",
+    "The Mathesis form could not be shown: no Mathesis TUI took the question in time. Do not guess a reason for the learner; if they ask, say that the form could not be shown. Ask the same question another way:",
     "",
     "- If the built-in `question` tool is available, ask ONE form with two questions:",
     `  1. header "Answer", prompt: the question text${question.kind === "quiz" ? `, choices: ${question.options!.map((o, i) => `"${letter(i)}. ${o}"`).join(", ")}, "I don't know"` : ", free-form answer"}`,
@@ -247,8 +247,19 @@ function nextStep(question: OpenQuestion, record: AnswerRecord, phase: Phase | u
   }
 }
 
+const TYPE_DESCRIPTION =
+  "Required. The question's role: probe (probe phase); predict or check (teach); recall, discrimination or reverse (review); recall, discrimination, reverse or composition (practice)."
+
+/** Models often put `type` inside `answerKey`, so both places are accepted (the schema cannot require either). */
+const answerKeyType = { type: schema.enum(ALL_TYPES, "Give `type` at the top level, not here.") }
+
+function questionType(input: Record<string, unknown>): QuestionType {
+  const key = (input.answerKey ?? {}) as Record<string, unknown>
+  return oneOf({ type: input.type ?? key.type }, "type", ALL_TYPES)
+}
+
 const common = {
-  type: schema.enum(ALL_TYPES, "The question's role: probe (probe phase); predict or check (teach); recall, discrimination or reverse (review); recall, discrimination, reverse or composition (practice)."),
+  type: schema.enum(ALL_TYPES, TYPE_DESCRIPTION),
   nodeId: schema.str("Teach phase: the plan node this question is about (required there)."),
   ideaId: schema.str("Review and practice: the card this question exercises (required there)."),
 }
@@ -266,12 +277,13 @@ export const questionTools: ToolSpec[] = [
           {
             explanation: schema.str("Why the correct option is correct, reasoned out BEFORE choosing the index. Shown to you after the answer."),
             correctIndex: { type: "integer", minimum: 0, description: "0-based index of the correct option." },
+            ...answerKeyType,
           },
           ["explanation", "correctIndex"],
         ),
         ...common,
       },
-      ["question", "options", "answerKey", "type"],
+      ["question", "options", "answerKey"],
     ),
     async run(input, call, rt) {
       await refuseWhileOpen(rt, call)
@@ -290,7 +302,7 @@ export const questionTools: ToolSpec[] = [
         throw new Refusal(`answerKey.correctIndex must be 0–${options.length - 1}.`)
       }
       const explanation = text(key, "explanation", { max: 4000 })!
-      const type = oneOf(input, "type", ALL_TYPES)
+      const type = questionType(input)
       const target = await validateTarget(rt, state, type, input)
       return ask(rt, call, {
         questionID: randomUUID(),
@@ -312,17 +324,17 @@ export const questionTools: ToolSpec[] = [
     input: schema.object(
       {
         question: schema.str("The question text (Markdown; no LaTeX)."),
-        answerKey: schema.object({ correctAnswer: schema.str("Your committed answer with its reasoning, written BEFORE asking.") }, ["correctAnswer"]),
+        answerKey: schema.object({ correctAnswer: schema.str("Your committed answer with its reasoning, written BEFORE asking."), ...answerKeyType }, ["correctAnswer"]),
         ...common,
       },
-      ["question", "answerKey", "type"],
+      ["question", "answerKey"],
     ),
     async run(input, call, rt) {
       await refuseWhileOpen(rt, call)
       const state = call.state!
       const prompt = text(input, "question", { max: 4000 })!
       const correctAnswer = text((input.answerKey ?? {}) as Record<string, unknown>, "correctAnswer", { max: 4000 })!
-      const type = oneOf(input, "type", ALL_TYPES)
+      const type = questionType(input)
       const target = await validateTarget(rt, state, type, input)
       return ask(rt, call, {
         questionID: randomUUID(),

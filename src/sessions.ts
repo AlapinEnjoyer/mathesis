@@ -6,7 +6,7 @@ import type { ModelRef, ModelRole } from "./config.ts"
 import type { ModelRefInput, SetupInput, StartInput } from "./rpc.ts"
 import { topicPlan, type Runtime } from "./runtime.ts"
 import { setPhase } from "./state.ts"
-import { isSlug, slugify } from "./store/vault.ts"
+import { isSlug, slugify, topicSlug } from "./store/vault.ts"
 
 type Ctx = Plugin.Context
 
@@ -114,7 +114,7 @@ export async function startSession(ctx: Ctx, rt: Runtime, input: StartInput): Pr
     } else {
       goal = input.goal?.trim()
       if (!goal) throw new Error("Say what you want to learn, e.g. /learn how binary search finds its bounds")
-      topicId = slugify(goal, 40)
+      topicId = topicSlug(goal)
     }
   } else if (input.topic) {
     topicId = isSlug(input.topic) ? input.topic : slugify(input.topic, 40)
