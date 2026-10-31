@@ -57,10 +57,10 @@ describe("transcribe", () => {
     let seen: { url: string; init: RequestInit } | undefined
     const fake = (async (url: string, init: RequestInit) => {
       seen = { url, init }
-      return Response.json({ text: " because B " })
+      return Response.json({ text: " because B\n and not A " })
     }) as unknown as typeof fetch
     const text = await transcribe({ url: "http://localhost:9/v1/audio/transcriptions", model: "whisper-1", apiKeyEnv: "MATHESIS_TEST_KEY" }, file, fake)
-    expect(text).toBe("because B")
+    expect(text).toBe("because B and not A")
     expect(seen?.url).toBe("http://localhost:9/v1/audio/transcriptions")
     expect((seen?.init.headers as Record<string, string>).Authorization).toBe("Bearer secret")
     const body = seen?.init.body as FormData

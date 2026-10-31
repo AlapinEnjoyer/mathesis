@@ -109,15 +109,18 @@ export function startRecording(config: VoiceConfig): Recording {
   }
 }
 
+/** Whisper puts each segment on its own line; the transcript is one paragraph. */
+const oneLine = (text: string) => text.replace(/\s+/g, " ").trim()
+
 export async function transcribe(endpoint: Endpoint, file: string, fetchImpl: typeof fetch = fetch): Promise<string> {
-  if ("command" in endpoint) return (await run(expand(endpoint.command, file))).trim()
+  if ("command" in endpoint) return oneLine(await run(expand(endpoint.command, file)))
   const body = new FormData()
   body.append("file", Bun.file(file), "speech.wav")
   body.append("model", endpoint.model)
   const response = await fetchImpl(endpoint.url, { method: "POST", headers: authorization(endpoint), body })
   if (!response.ok) throw new Error(`transcription failed (${response.status}): ${(await response.text()).slice(0, 300)}`)
   const result = (await response.json()) as { text?: unknown }
-  return typeof result.text === "string" ? result.text.trim() : ""
+  return typeof result.text === "string" ? oneLine(result.text) : ""
 }
 
 export interface Playback {
