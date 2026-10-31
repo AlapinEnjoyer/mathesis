@@ -94,8 +94,32 @@ inside it, so the provider's prompt cache stays warm.
 
 Thinking out loud is the most useful part of an answer, and speaking is faster than typing. Mathesis can record your
 thinking while a question form is open, transcribe it, and add it to the thinking of your answer. It can also read the
-open question aloud. Both are off until you set them in `cli.json`. They run in the TUI process, so audio stays on your
-machine unless you choose a cloud endpoint.
+open question aloud. Both are off until you set them in `cli.json`. They run in the TUI process, so with a local
+model your audio never leaves your machine.
+
+- **Dictate:** `ctrl+x v` starts recording, `ctrl+x v` again stops it. A toast shows the transcript. When you submit
+  the form, it is added to your thinking as `Spoken: …`, after anything you typed. It goes to the model with your
+  answer and into the session note (`sessions/<date>-<topic>-<kind>.md`). It does not appear in the form itself
+  (opencode forms can't be changed once shown), and it only works on Mathesis questions, not on opencode's built-in
+  question tool.
+- **Read aloud:** `ctrl+x o` reads the open question and its choices; press again to stop. `"autoRead": true` reads
+  every question when it appears.
+
+#### Local speech-to-text with whisper.cpp (recommended)
+
+```sh
+brew install whisper-cpp ffmpeg
+mkdir -p ~/models
+# a balanced model: multilingual, close to large-v3 accuracy, fast on Apple Silicon (574 MB)
+curl -L -o ~/models/ggml-large-v3-turbo-q5_0.bin \
+  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin
+```
+
+Smaller models (`base`, `small`) are faster and less accurate; see the
+[whisper.cpp README](https://github.com/ggml-org/whisper.cpp). whisper.cpp assumes English unless you pass `-l auto`
+(or a language code).
+
+Either run `whisper-cli` for each recording (simple, about 2 s per short clip because the model loads each time):
 
 ```jsonc
 // ~/.config/opencode/cli.json
@@ -105,12 +129,8 @@ machine unless you choose a cloud endpoint.
       "package": "opencode-mathesis",
       "options": {
         "voice": {
-          // Local whisper.cpp (brew install whisper-cpp, then download a ggml model):
-          "stt": { "command": ["whisper-cli", "-m", "~/models/ggml-base.en.bin", "-nt", "-np", "-f", "{file}"] },
-          // or any OpenAI-compatible endpoint, local or cloud:
-          // "stt": { "url": "http://localhost:8000/v1/audio/transcriptions", "model": "whisper-1", "apiKeyEnv": "MY_KEY" },
-          "tts": { "command": ["say"] },   // the text arrives on stdin (macOS say, piper, espeak)
-          "autoRead": false                // read every question aloud when it appears
+          "stt": { "command": ["whisper-cli", "-m", "~/models/ggml-large-v3-turbo-q5_0.bin", "-l", "auto", "-nt", "-np", "-f", "{file}"] },
+          "tts": { "command": ["say"] }
         }
       }
     }
@@ -118,14 +138,34 @@ machine unless you choose a cloud endpoint.
 }
 ```
 
-- **Dictate:** `ctrl+x v` starts recording, `ctrl+x v` again stops it. A toast shows the transcript, and it is added to
-  the thinking as `Spoken: …` when you submit the form. You can't edit it in the form.
-- **Read aloud:** `ctrl+x o` reads the open question and its choices; press again to stop.
-- Recording uses `ffmpeg` (macOS `avfoundation`, Linux PulseAudio). Change it with `record` (`{file}` is the WAV
-  file to write), and change the player for endpoint speech with `play`. Change the keys with `dictateKey` and
-  `readKey`, or bind the commands `mathesis.dictate` and `mathesis.read` in `keybinds`.
-- macOS asks once for microphone access for your terminal.
-- An endpoint's API key is read from the environment variable named in `apiKeyEnv`; it is never stored.
+or keep the model loaded in `whisper-server` (faster, about 1.5 s) and point Mathesis at it:
+
+```sh
+whisper-server -m ~/models/ggml-large-v3-turbo-q5_0.bin -l auto --port 8178 --inference-path /v1/audio/transcriptions
+```
+
+```jsonc
+"stt": { "url": "http://127.0.0.1:8178/v1/audio/transcriptions", "model": "whisper-1" }
+```
+
+#### Paid APIs
+
+Any OpenAI-compatible endpoint works, for example OpenAI or Groq. The key is read from the environment variable named
+in `apiKeyEnv` and is never stored. Your audio (and, for speech, the question text) is then sent to that provider.
+
+```jsonc
+"stt": { "url": "https://api.openai.com/v1/audio/transcriptions", "model": "gpt-4o-transcribe", "apiKeyEnv": "OPENAI_API_KEY" },
+"tts": { "url": "https://api.openai.com/v1/audio/speech", "model": "gpt-4o-mini-tts", "voice": "alloy", "apiKeyEnv": "OPENAI_API_KEY" }
+```
+
+#### Other settings
+
+- `tts` with `command`: the text arrives on stdin (`say` on macOS, `piper` or `espeak` on Linux). With `url`, the
+  returned audio is played with `play` (default `afplay` on macOS, `ffplay` on Linux; `{file}` is the audio file).
+- Recording uses `ffmpeg` (macOS `avfoundation`, Linux PulseAudio). Change it with `record` (`{file}` is the WAV file
+  to write). macOS asks once for microphone access for your terminal.
+- Change the keys with `dictateKey` and `readKey`, or bind the commands `mathesis.dictate` and `mathesis.read` in
+  `keybinds`.
 - opencode's own voice feature (realtime voice sessions with OpenAI, xAI or Google) is cloud-only and not available to
   the TUI, so Mathesis does not use it.
 
