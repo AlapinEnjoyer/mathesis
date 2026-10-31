@@ -102,6 +102,18 @@ describe("links between notes", () => {
   })
 })
 
+describe("card diagrams", () => {
+  test("idea_upsert stores a mermaid diagram (fence stripped) and refuses text that is not one", async () => {
+    await toTeach()
+    reply = () => ({ answer: "0", confidence: "90" })
+    const bad = await call("idea_upsert", { questionID: lastQuestionID(await call("quiz", quiz())), claim: "c", why: "w", diagram: "a box with arrows" })
+    expect(bad).toContain("must be a mermaid diagram")
+    const id = lastQuestionID(await call("quiz", quiz()))
+    expect(await call("idea_upsert", { questionID: id, claim: "c", why: "w", diagram: "```mermaid\ngraph LR\n  lo --> hi\n```" })).toContain("Card created")
+    expect((await rt.vault.readIdea("interval"))?.picture).toBe("```mermaid\ngraph LR\n  lo --> hi\n```")
+  })
+})
+
 describe("probe → teach → card", () => {
   test("the whole flow", async () => {
     const started = await call("topic_start", { goal: "how binary search finds its bounds" })
@@ -465,7 +477,7 @@ describe("spaced review", () => {
   })
 
   test("pickNext and suggestMode", () => {
-    const idea = (id: string, topic: string, extra = {}) => ({ id, topic, kind: "proposition" as const, requires: [], about: [], claim: "", why: "", misconceptions: "", askedBefore: [], ...extra })
+    const idea = (id: string, topic: string, extra = {}) => ({ id, topic, kind: "proposition" as const, requires: [], about: [], claim: "", why: "", picture: "", misconceptions: "", askedBefore: [], ...extra })
     const due = [idea("a", "t1"), idea("b", "t1"), idea("c", "t2")]
     expect(pickNext(due, [], "t1")?.id).toBe("c")
     expect(pickNext(due, ["c"], "t2")?.id).toBe("a")

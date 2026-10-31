@@ -217,6 +217,21 @@ describe("links", () => {
   })
 })
 
+describe("pictures", () => {
+  test("a diagram goes into a Picture section after Why; an existing picture is kept", async () => {
+    await vault.upsertIdea({ id: "a", topic: "t", claim: "C", why: "W", picture: "graph LR\n  a --> b" }, now)
+    const text = await readFile(join(root, "ideas/a.md"), "utf8")
+    expect(text).toContain("## Why\nW\n\n## Picture\n```mermaid\ngraph LR\n  a --> b\n```\n\n## Known misconceptions")
+    expect((await vault.readIdea("a"))?.picture).toContain("a --> b")
+    await vault.upsertIdea({ id: "a", picture: "graph TD\n  x --> y" }, now)
+    expect(await readFile(join(root, "ideas/a.md"), "utf8")).not.toContain("x --> y")
+    await vault.upsertIdea({ id: "a", picture: "graph TD\n  x --> y", replace: true }, now)
+    const replaced = await readFile(join(root, "ideas/a.md"), "utf8")
+    expect(replaced).toContain("x --> y")
+    expect(replaced.match(/## Picture/g)?.length).toBe(1)
+  })
+})
+
 describe("paths", () => {
   test("session note paths cannot escape the vault", () => {
     expect(() => vault.sessionNotePath("../../x", "t", "teach")).toThrow(/Invalid session date/)

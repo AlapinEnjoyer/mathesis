@@ -20,6 +20,8 @@ export async function cardDetail(rt: Runtime, idea: Idea, options: { askedBefore
     misconception ? "### The right model" : "### Claim",
     idea.claim || "(empty)",
     ...(idea.why ? ["", "### Why", idea.why] : []),
+    // The learner sees the terminal, not this mermaid: redraw it as a Unicode diagram if a question or correction needs it.
+    ...(idea.picture.trim() ? ["", "### Picture (mermaid in the note; redraw as a Unicode diagram if you show it)", idea.picture] : []),
     ...(idea.misconceptions ? ["", misconception ? "### The wrong model" : "### Known misconceptions", idea.misconceptions] : []),
     ...(foundations.length ? ["", misconception ? "### Ideas it corrupts" : "### Builds on", ...foundations] : []),
     "",

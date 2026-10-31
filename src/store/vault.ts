@@ -78,6 +78,7 @@ export interface Idea {
   srs?: Srs
   claim: string
   why: string
+  picture: string
   misconceptions: string
   askedBefore: string[]
 }
@@ -93,6 +94,8 @@ export interface IdeaPatch {
   claim?: string
   why?: string
   misconceptions?: string
+  /** A mermaid diagram for the Picture section (without the code fence). */
+  picture?: string
   /** Initial or new FSRS state, written in the same write as the rest. */
   srs?: Srs
   /** Overwrite Claim and Why even when they already have text. Default: only fill empty sections. */
@@ -129,6 +132,15 @@ const ideaLabel = (id: string) => id.replace(/-/g, " ")
 /** The links line Mathesis writes. A line the learner changed no longer matches and is left alone. */
 const BUILDS_ON_OWNED = /^Builds on: \[[^\]\n]+\]\(\.\/[a-z0-9-]+\.md\)(?:, \[[^\]\n]+\]\(\.\/[a-z0-9-]+\.md\))*$/m
 const BUILDS_ON_ANY = /^Builds on:/m
+/** Sets the Picture section (a mermaid block); a new section goes right after Why. */
+function withPicture(body: string, diagram: string): string {
+  const block = ["```mermaid", diagram.trim(), "```"].join("\n")
+  if (getSection(body, "Picture") !== undefined) return setSection(body, "Picture", block)
+  const next = /^## Known misconceptions\b/m.exec(body)
+  if (!next) return setSection(body, "Picture", block)
+  return `${body.slice(0, next.index)}## Picture\n${block}\n\n${body.slice(next.index)}`
+}
+
 /** The topic link at the top of a card. A learner-written "Topic:" line is left alone. */
 const TOPIC_LINE = /^Topic:/m
 const topicLine = (topic: string) => `Topic: [${ideaLabel(topic)}](../topics/${topic}.md)`
@@ -325,6 +337,9 @@ export class Vault {
       for (const id of requires) if (await this.hasIdea(id)) linked.push(id)
       const nextWhy = withBuildsOn(why, linked)
       if (nextWhy !== currentWhy) note.body = setSection(note.body, "Why", nextWhy)
+      if (patch.picture !== undefined && (patch.replace || !(getSection(note.body, "Picture") ?? "").trim())) {
+        note.body = withPicture(note.body, patch.picture)
+      }
       if (patch.misconceptions !== undefined) {
         const current = (getSection(note.body, "Known misconceptions") ?? "").trim()
         const addition = patch.misconceptions.trim()
@@ -501,6 +516,7 @@ function toIdea(id: string, note: Note): Idea {
     ...(srs ? { srs } : {}),
     claim: getSection(note.body, "Claim") ?? "",
     why: getSection(note.body, "Why") ?? "",
+    picture: getSection(note.body, "Picture") ?? "",
     misconceptions: getSection(note.body, "Known misconceptions") ?? "",
     askedBefore: splitList(getSection(note.body, "Asked before")).items,
   }
