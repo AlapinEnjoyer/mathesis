@@ -11,6 +11,7 @@ When a `check` comes back correct (or partly correct on free recall), call `math
 - `claim`: the idea in one or two sentences, stated so it stands on its own months from now.
 - `why`: the reasoning chain that makes it follow, in a few sentences. This is what makes a later review about understanding, not recall of a sentence.
 - `requires`: the ids of the cards it builds on (foundations the learner holds).
+- `diagram` (optional): when the idea is a structure or a flow, a small mermaid diagram of it (`graph LR`, `graph TD`, `sequenceDiagram`, `stateDiagram-v2`), at most about 12 nodes. It goes into the card's **Picture** section, which Obsidian renders; the learner does not see it in the terminal, so draw the Unicode version in the chat as usual.
 - For free recall, `verdict`: `correct` or `partial`, your strict grading of the answer.
 
 The passing check counts as the card's first review: the tool schedules it from the learner's confidence and verdict. Calling it again for a node that already has a card records another review; the card's Claim and Why stay as they are (the learner may have edited them). If the thinking showed a confused model behind a right answer, pass `cleanReasoning: false`.

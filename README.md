@@ -202,6 +202,12 @@ Topic: [calculus](../topics/calculus.md)
 
 Builds on: [derivative as local slope](./derivative-as-local-slope.md)
 
+## Picture
+```mermaid
+graph LR
+  x --> u["u = g(x)"] --> y["y = f(u)"]
+```
+
 ## Known misconceptions
 
 ## Asked before
@@ -212,6 +218,9 @@ The notes link to each other with plain Markdown links, so Obsidian's graph view
 structure: a card links its topic and the cards it builds on; a topic links its cards and, under **Related topics**,
 other topics whose cards it builds on or that build on it; a session note links its topic and the cards it created,
 reviewed or recorded as misconceptions.
+
+When an idea is a structure or a flow, the model draws it: a small Unicode diagram in the chat (the terminal does not
+render mermaid), and a mermaid diagram in the card's **Picture** section, which Obsidian renders.
 
 Edit notes freely: Mathesis re-reads them every time, keeps keys and sections it does not know, and never overwrites
 the Claim or Why you wrote. Setting a card's `due` to a past date makes it due.

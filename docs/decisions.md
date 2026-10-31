@@ -183,3 +183,13 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   **Related topics** (add-only, like **Ideas**).
 - **A session note links its topic and every card it created or touched** (`Card created`, `Card reviewed again`,
   misconception cards). Review questions already linked their card.
+
+## Diagrams
+
+- **In the chat: Unicode box diagrams** in a code block, at most about 15 lines and 70 columns, only for structures and
+  flows. The terminal renders neither mermaid nor LaTeX; box characters in a monospace block do render.
+- **In the notes: a mermaid Picture section** on cards, from an optional `diagram` on `idea_upsert` (checked to start
+  like a mermaid diagram; the fence is optional). Filled once, like Claim and Why, so a learner's edit stays. Reviews
+  show the picture to the model with a note to redraw it in Unicode.
+- **Excalidraw not built.** An Excalidraw MCP server added to opencode would already be callable by the Mathesis agent
+  (it denies only file edits and shell); files in the vault were judged too fragile.

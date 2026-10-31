@@ -153,6 +153,7 @@ export const teachTools: ToolSpec[] = [
         claim: schema.str("The idea in one or two sentences that stand on their own."),
         why: schema.str("The reasoning chain that makes it follow."),
         requires: schema.list("Ids of the cards this idea builds on."),
+        diagram: schema.str("Optional: a small mermaid diagram of the idea (graph LR/TD, sequenceDiagram, stateDiagram-v2), without the code fence. Goes into the card's Picture section."),
         kind: schema.enum(["proposition", "chain"], "proposition (one fact) or chain (a reasoning chain). Default proposition."),
         verdict: schema.enum(["correct", "partial"], "Free-recall checks: your strict grading of the answer. Required for them."),
         cleanReasoning: { type: "boolean", description: "false when the answer was right but the thinking showed a confused model (caps the rating at Good)." },
@@ -164,6 +165,7 @@ export const teachTools: ToolSpec[] = [
       const claim = text(input, "claim", { max: 2000 })!
       const why = text(input, "why", { max: 6000 })!
       const kind = oneOf(input, "kind", ["proposition", "chain"] as const, "proposition")
+      const diagram = mermaidDiagram(text(input, "diagram", { optional: true, max: 4000 }))
       const requested = text(input, "id", { optional: true })
       if (requested && !isSlug(requested)) throw new Refusal("`id` must be a lowercase slug (a-z, 0-9, single hyphens).")
       let correct: true | "partial" = true
@@ -214,6 +216,7 @@ export const teachTools: ToolSpec[] = [
             requires: slugs(input, "requires", id),
             claim,
             why,
+            ...(diagram ? { picture: diagram } : {}),
             source,
             srs,
           },
@@ -343,4 +346,18 @@ async function linkCard(rt: Runtime, sessionID: string, topic: string, phase: Ph
   await rt.vault
     .appendSession({ sessionID, topic, kind: sessionKind(phase), date: today(now) }, `**${label}:** [${id.replace(/-/g, " ")}](../ideas/${id}.md)`)
     .catch(() => {})
+}
+
+const MERMAID_START = /^(graph|flowchart)\s+(TD|TB|BT|LR|RL)\b|^(sequenceDiagram|stateDiagram(-v2)?|classDiagram|erDiagram|mindmap|timeline)\b/
+
+/** A mermaid diagram without its code fence; refuses text that does not start like a mermaid diagram. */
+function mermaidDiagram(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  const body = value.replace(/^\s*```(?:mermaid)?\s*\n?/i, "").replace(/\n?```\s*$/, "").trim()
+  if (!body) return undefined
+  if (!MERMAID_START.test(body)) {
+    throw new Refusal("`diagram` must be a mermaid diagram that starts with e.g. `graph LR`, `graph TD`, `sequenceDiagram` or `stateDiagram-v2`.")
+  }
+  if (body.includes("```")) throw new Refusal("`diagram` must be one mermaid diagram without code fences inside it.")
+  return body
 }
