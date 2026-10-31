@@ -161,6 +161,19 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **TUI options come from `cli.json`**, not `opencode.jsonc` (found while testing: `voice` was empty in the TUI). This
   also applies to `notify` and `panelKey`; the README now says so.
 
+## UX after the first week
+
+- **Dictation has a status line** above the form (`session.composer.top`): recording, transcribing, or how many
+  dictations are attached. The recording toast is short now; `ctrl+x z` (`mathesis.dictate-undo`) drops the last
+  dictation (RPC `dictation` with `undo`).
+- **The first session offers setup** when the mathesis agent is missing (once per TUI start; "Not now" keeps the old
+  notice). The check rides on the cheap `due` call, which also returns the next due date for `/recall` when nothing is
+  due.
+- **Calibration in `/mathesis`**: right answers per stated confidence, from the review log (checks, reviews,
+  practice; partial counts as half; "I don't know" left out). A verdict needs at least 3 answers; ±15 points counts as
+  well calibrated. Probe answers are not in the log and not counted.
+- **The panel shows progress**: steps of the plan that have a card, and what this session did (from log entries with
+  the session id).
 ## Note links
 
 - **Every link is a plain relative Markdown link**, so Obsidian and other tools show the graph without a plugin.

@@ -130,12 +130,18 @@ export class QuestionBroker {
     for (const entry of [...this.entries.values()]) entry.finish({ kind: "aborted", cause: "unload" }, "aborted")
   }
 
-  /** Dictated thinking for an open question. Kept until the form is answered. */
-  dictation(formID: string, text: string): boolean {
+  /** Dictated thinking for an open question, kept until the form is answered; `undo` drops the last one. */
+  dictation(formID: string, change: { text?: string; undo?: boolean }): { accepted: boolean; count: number } {
     const entry = this.entryForForm(formID)
-    if (!entry || !text.trim()) return false
-    entry.spoken.push(text.trim())
-    return true
+    if (!entry) return { accepted: false, count: 0 }
+    if (change.undo) {
+      const accepted = entry.spoken.pop() !== undefined
+      return { accepted, count: entry.spoken.length }
+    }
+    const text = change.text?.trim()
+    if (!text) return { accepted: false, count: entry.spoken.length }
+    entry.spoken.push(text)
+    return { accepted: true, count: entry.spoken.length }
   }
 
   /** A form reply (from the server's event stream, or relayed by a TUI). Unknown or finished forms are ignored. */

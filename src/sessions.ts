@@ -90,7 +90,7 @@ export async function chooseModel(ctx: Ctx, rt: Runtime, role: ModelRole, curren
   }
 }
 
-async function agentExists(ctx: Ctx): Promise<boolean> {
+export async function agentExists(ctx: Ctx): Promise<boolean> {
   try {
     const result = (await ctx.agent.list()) as unknown
     const data = Array.isArray(result) ? result : ((result as { data?: unknown }).data ?? [])

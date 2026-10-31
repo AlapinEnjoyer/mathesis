@@ -40,10 +40,13 @@ export const Mathesis = Rpc.define({
       input: obj({ formID: str, answer: { type: "object" }, cancelled: bool, message: str }, ["formID"]),
       output: obj({ accepted: bool }, ["accepted"]),
     },
-    /** Dictated thinking for an open question's form; it is added to the typed thinking when the form is answered. */
+    /**
+     * Dictated thinking for an open question's form; it is added to the typed thinking when the form is answered.
+     * `undo` drops the last dictation instead. `count` is how many dictations the question holds afterwards.
+     */
     dictation: {
-      input: obj({ formID: str, text: str }, ["formID", "text"]),
-      output: obj({ accepted: bool }, ["accepted"]),
+      input: obj({ formID: str, text: str, undo: bool }, ["formID"]),
+      output: obj({ accepted: bool, count: { type: "number" } }, ["accepted", "count"]),
     },
     /** Open questions, so a restarted TUI can show them again. */
     pending: {
@@ -113,10 +116,10 @@ export const Mathesis = Rpc.define({
         ["title", "rows"],
       ),
     },
-    /** Only the number of due cards (cheap; for the footer). */
+    /** The number of due cards (cheap; for the footer), the next due date when none is due, and whether setup is needed. */
     due: {
       input: obj({}),
-      output: obj({ due: { type: "number" } }, ["due"]),
+      output: obj({ due: { type: "number" }, next: str, setupNeeded: bool }, ["due"]),
     },
     /** Writes the agent file and the vault folders; stores the model choice. */
     setup: {

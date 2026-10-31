@@ -34,6 +34,12 @@ export default Plugin.define({
     /** The question form on screen in each session, for dictation and read-aloud. */
     const openForms = new Map<string, { form: FormSpec; location?: Location }>()
     let recording: { recording: Recording; formID: string; location?: Location } | undefined
+    /** What the dictation status line shows: the recorder's state, and how many dictations each open form holds. */
+    const [dictation, setDictation] = createSignal<{ state: "idle" | "recording" | "transcribing"; formID?: string; counts: Record<string, number> }>({
+      state: "idle",
+      counts: {},
+    })
+    const setCount = (formID: string, count: number) => setDictation((d) => ({ ...d, counts: { ...d.counts, [formID]: count } }))
     let playback: Playback | undefined
 
     const viewing = (sessionID: string) => {
@@ -118,6 +124,10 @@ export default Plugin.define({
             recording.recording.cancel()
             recording = undefined
           }
+          setDictation((d) => {
+            const { [formID]: _, ...counts } = d.counts
+            return { ...(d.formID === formID ? { state: "idle" as const } : { state: d.state, formID: d.formID }), counts }
+          })
           changed()
           if (reason === "aborted" || reason === "fallback") {
             void context.client.session.form.cancel({ sessionID, formID, message: "The question was closed." }).catch(() => {})
@@ -157,7 +167,23 @@ export default Plugin.define({
       return model ? { providerID: model.providerID, id: model.modelID, ...(model.variant ? { variant: model.variant } : {}) } : undefined
     }
 
+    let setupOffered = false
+    /** Before the first session without the mathesis agent, offer to run setup (once per TUI start). */
+    async function offerSetup() {
+      if (setupOffered) return
+      const { setupNeeded } = (await rpc().due({}, at()).catch(() => ({}))) as { setupNeeded?: boolean }
+      if (!setupNeeded) return
+      setupOffered = true
+      const run = await context.ui.dialog.confirm({
+        title: "Mathesis is not set up yet",
+        message: "Setup writes the mathesis agent (its permission rules) and the vault folders, and takes a few seconds. Without it, sessions use the default agent.",
+        label: { confirm: "Set up now", cancel: "Not now" },
+      })
+      if (run) await setupCommand()
+    }
+
     async function start(input: { kind: "learn" | "recall" | "practice"; goal?: string; topic?: string }) {
+      await offerSetup()
       try {
         const directory = here().directory
         const model = currentModel()
@@ -318,6 +344,14 @@ export default Plugin.define({
         ),
       }),
       context.ui.slot({
+        append: "session.composer.top",
+        render: (input) => (
+          <Show when={dictationLine(input.sessionID)}>
+            <text fg={dictation().state === "recording" ? context.theme.text.base : context.theme.text.muted}>{dictationLine(input.sessionID)}</text>
+          </Show>
+        ),
+      }),
+      context.ui.slot({
         append: "session.panel",
         render: (input) => (
           <Show when={input.name === PANEL}>
@@ -378,18 +412,21 @@ export default Plugin.define({
       if (recording) {
         const { recording: active, formID, location } = recording
         recording = undefined
-        info("Transcribing…")
+        setDictation((d) => ({ ...d, state: "transcribing", formID }))
         let file: string | undefined
         try {
           file = await active.stop()
           const text = await transcribe(voice.stt!, file)
           if (!text) return info("Nothing was heard.", "warning")
-          const { accepted } = (await rpc().dictation({ formID, text }, at(location))) as { accepted: boolean }
-          if (accepted) info(`Spoken thinking added: ${text}`, "success", 8000)
-          else info("The question was already closed.", "warning")
+          const { accepted, count } = (await rpc().dictation({ formID, text }, at(location))) as { accepted: boolean; count: number }
+          if (accepted) {
+            setCount(formID, count)
+            info(`Spoken thinking added: ${text}`, "success", 8000)
+          } else info("The question was already closed.", "warning")
         } catch (error) {
           info(`Dictation failed: ${errorText(error)}`, "error", 8000)
         } finally {
+          setDictation((d) => (d.formID === formID ? { ...d, state: "idle" } : d))
           if (file) await rm(file, { force: true })
         }
         return
@@ -399,10 +436,40 @@ export default Plugin.define({
       if (!open) return info("No open Mathesis question in this session.")
       try {
         recording = { recording: startRecording(voice), formID: open.form.id, location: open.location }
-        info("Recording… press again to stop.", "info", 60_000)
+        setDictation((d) => ({ ...d, state: "recording", formID: open.form.id }))
+        info("Recording… press again to stop.", "info", 3000)
       } catch (error) {
         info(`Could not start recording: ${errorText(error)}`, "error", 8000)
       }
+    }
+
+    /** Drops the last dictation of the open question. */
+    async function undoDictation() {
+      const open = currentForm()
+      if (!open) return info("No open Mathesis question in this session.")
+      try {
+        const { accepted, count } = (await rpc().dictation({ formID: open.form.id, undo: true }, at(open.location))) as { accepted: boolean; count: number }
+        setCount(open.form.id, count)
+        info(accepted ? `Last dictation removed${count ? ` (${count} left)` : ""}.` : "Nothing dictated for this question.", accepted ? "success" : "info")
+      } catch (error) {
+        info(errorText(error), "error")
+      }
+    }
+
+    const key = (id: string) => context.keymap.shortcuts(id)[0]
+    /** The dictation status line for a session's open question, or nothing. */
+    function dictationLine(sessionID: string): string | undefined {
+      const d = dictation()
+      tick()
+      const formID = openForms.get(sessionID)?.form.id
+      if (!formID) return undefined
+      const stop = key("mathesis.dictate")
+      if (d.formID === formID && d.state === "recording") return `● Recording your thinking${stop ? ` · ${stop} to stop` : ""}`
+      if (d.formID === formID && d.state === "transcribing") return "Transcribing…"
+      const count = d.counts[formID] ?? 0
+      if (!count) return undefined
+      const undo = key("mathesis.dictate-undo")
+      return `Spoken thinking attached (${count}), added when you submit${undo ? ` · ${undo} removes the last` : ""}`
     }
 
     function speakForm(form: FormSpec) {
@@ -460,8 +527,11 @@ export default Plugin.define({
           run: async (input) => {
             const topic = topicArg(input)
             if (!topic) {
-              const count = (await rpc().due({}, at()).catch(() => undefined)) as { due: number } | undefined
-              if (count?.due === 0) return context.ui.toast.show({ title: "Mathesis", message: "No cards are due.", variant: "info" })
+              const count = (await rpc().due({}, at()).catch(() => undefined)) as { due: number; next?: string } | undefined
+              if (count?.due === 0) {
+                const message = count.next ? `No cards are due. Next review: ${count.next}.` : "No cards yet. Learn something with /learn first."
+                return context.ui.toast.show({ title: "Mathesis", message, variant: "info" })
+              }
             }
             return start({ kind: "recall", topic })
           },
@@ -519,6 +589,14 @@ export default Plugin.define({
           run: () => dictate(),
         },
         {
+          id: "mathesis.dictate-undo",
+          title: "Mathesis: remove the last dictation",
+          group: "Mathesis",
+          palette: true,
+          ...(voice.stt ? { bind: voice.undoKey } : {}),
+          run: () => undoDictation(),
+        },
+        {
           id: "mathesis.read",
           title: "Mathesis: read the open question aloud",
           group: "Mathesis",
@@ -527,7 +605,7 @@ export default Plugin.define({
           run: () => readAloud(),
         },
       ],
-      bindings: ["mathesis.dictate", "mathesis.read"],
+      bindings: ["mathesis.dictate", "mathesis.dictate-undo", "mathesis.read"],
     }))
 
     return () => stops.forEach((stop) => stop())
