@@ -12,6 +12,8 @@ Phase-0 findings about the real opencode API are in `docs/spike.md`; they win ov
 
 ## Load locally
 Add the absolute repo path to `plugins` in `~/.config/opencode/opencode.jsonc`, then restart opencode. Set `MATHESIS_VAULT` to use a throwaway vault while testing.
+TUI options (`notify`, `panelKey`, `voice`) are read from `cli.json` (`plugins: [{ package, options }]`), not from
+`opencode.jsonc`.
 
 ## Test in opencode
 - Run `opencode --standalone` from the repo (a private server, so the user's background service is not touched),

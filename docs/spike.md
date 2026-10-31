@@ -105,3 +105,55 @@ restarts.
 - `opencode --standalone` runs a private server, so tests do not touch the user's background service.
 - The host provides `@opencode/plugin` and `effect` at runtime (`runtime-modules`). The version in `package.json` only
   gives types and a fallback; the supported opencode range is stated in the README.
+
+## Plugin reload and the question path (2026-10-31)
+
+Goal: reproduce the missed claim from the first real use (`HANDOFF.md` §7): after a plugin reload, the agent asked
+again and no TUI claimed the question within 4 s.
+
+Setup: a copy of the plugin with a debug log (a random id per module load and per `setup` call, logged on `setup`,
+`cleanup`, `asked`, `claim`, and in the TUI on `questionAsked` and the claim result), a minimal `OPENCODE_CONFIG_DIR`,
+`opencode --standalone` 2.2.1 in tmux, `/learn` with a free model, a multiple-choice form open on screen.
+
+| Trigger, with a form open | Reloads | Next question |
+|---|---|---|
+| `touch package.json` | 1 `setup` | asked 2.7 s later, claimed in 1 ms |
+| Edit `src/server.ts` (content change) | 1, new module instance | asked, claimed in 3 ms |
+| `package.json`, `server.ts`, `package.json` within 0.7 s | 3 `setup` within 0.8 s | asked when requested, claimed in 2 ms |
+| Every file in `src/` and `package.json`, twice within 0.5 s | 2 `setup` | asked 5.8 s later, claimed in 2 ms |
+
+Findings:
+
+- **The missed claim did not reproduce** in these runs. Each reload ran `cleanup` and then `setup` in the same
+  process; the new server part registered the RPC handlers, the TUI kept receiving `questionAsked` without renewing
+  its subscription (no `server.connected`), and its claim reached the new broker. Touching files without changing
+  their content re-runs `setup` but keeps the module instance; a content change loads a new module instance. The
+  incident ran on the background service with a git merge changing many files, which was not repeated here.
+- **Every reload ends the open question.** `cleanup` calls `abortAll`, the waiting tool returns "The question was
+  interrupted before the learner answered.", and the agent cannot tell this from the learner leaving. After three
+  interruptions the agent concluded that "the question form isn't reaching you" and switched to plain chat questions
+  for the rest of the session.
+- Consequences for the fix: keep a cheap guard for the reload case (the new server part announces itself, the TUI
+  re-claims pending questions there), and give the agent a distinct result when a question ends because the plugin
+  unloaded, telling it to ask the same question again with the form. A registry of brokers across instances is not
+  needed on this evidence.
+
+## Voice (2026-10-31)
+
+opencode 2.2.1, `--standalone` in tmux, test vault and config folder, stub STT (`echo`) and `say -o <file>` as TTS.
+
+- **opencode's voice API** (`client.experimental.voice.models` / `.session`) creates server-brokered realtime sessions
+  (WebRTC SDP answer or WebSocket token) for OpenAI `gpt-realtime`, xAI and Google. It needs a stored API key ("ChatGPT
+  sign-in can't start voice sessions"). The plugin `Context` has no voice, transcription or speech API;
+  `@opencode/ai` has transcription and speech clients, but the host doesn't provide them to plugins.
+- **TUI plugin options are read from `cli.json`** (`plugins: [{ package, options }]`); options in `opencode.jsonc` reach
+  only the server part. With the options only in `opencode.jsonc`, `context.options.voice` was empty in the TUI.
+- **Keybinds work while a form is open**, also with the text field focused: `ctrl+g` and `<leader>o` ran the commands
+  inside a free-recall form, and `<leader>v` ran on a built-in question. (The first try typed `v` into the field
+  because the binding wasn't registered, since the options were missing.)
+- **ffmpeg recording:** `ffmpeg -f avfoundation -i ":default" -ac 1 -ar 16000 -y x.wav` stopped with SIGINT exits with
+  255 and writes a valid WAV. Recording starts about 0.4 s after the spawn; the first run in a terminal was slower
+  (microphone permission).
+- **End to end:** record → stub transcript → toast "Spoken thinking added: …" → submit → the session note has
+  `**Thinking:** Spoken: …`. `ctrl+x o` wrote the question audio with `say`. The reload message from to-do 1 worked
+  too: after a plugin reload the agent said "form still works" and asked the same question again.

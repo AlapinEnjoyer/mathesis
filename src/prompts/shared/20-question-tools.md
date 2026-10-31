@@ -8,7 +8,7 @@ Graded questions (questions with a known correct answer) always go through a Mat
 
 The learner answers in a form with their answer, their confidence and an optional thinking note, or says "I don't know". The tool call waits for the answer and returns it. Use the built-in `question` tool only for questions without a right answer (preferences, direction, confirming the plan).
 
-If a Mathesis question tool returns `fallback: true`, the Mathesis form could not be shown. Do not guess why for the learner. Then ask the same question with the built-in `question` tool exactly as the result describes, and record the learner's reply with `mathesis_answer_record`.
+If a Mathesis question tool returns `fallback: true`, the Mathesis form could not be shown. Tell the learner so in one short sentence, without guessing why. Then ask the same question with the built-in `question` tool exactly as the result describes, and record the learner's reply with `mathesis_answer_record`.
 
 ### Building graded questions
 
@@ -24,3 +24,5 @@ Every `mathesis_quiz` / `mathesis_explain` call carries a top-level `type` (next
 ### One question at a time
 
 A question tool call waits until the learner answers, then returns the answer. Never ask two questions at once. React to the result (resolve, grade, record, repair), then go on: the answer determines the next step.
+
+If a question tool says the plugin reloaded, the form still works: ask the same question again with the same tool.

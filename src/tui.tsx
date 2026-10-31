@@ -1,8 +1,10 @@
+import { rm } from "node:fs/promises"
 import { Plugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
 import { createEffect, createSignal, For, on, Show } from "solid-js"
 import { localDate, shouldNotify } from "./notify.ts"
 import { Mathesis, type ModelRefInput } from "./rpc.ts"
+import { parseVoice, speak, spokenQuestion, startRecording, transcribe, type Playback, type Recording } from "./voice.ts"
 
 type Context = Plugin.Context
 type FormSpec = { id: string; title: string; fields: unknown[]; metadata?: Record<string, unknown> }
@@ -28,6 +30,11 @@ export default Plugin.define({
     const at = (location?: Location) => ({ location: (location ?? here()) as never })
     const locationOf = (event: unknown) => (event as { location?: Location }).location
     const formLocations = new Map<string, Location | undefined>()
+    const voice = parseVoice(context.options.voice)
+    /** The question form on screen in each session, for dictation and read-aloud. */
+    const openForms = new Map<string, { form: FormSpec; location?: Location }>()
+    let recording: { recording: Recording; formID: string; location?: Location } | undefined
+    let playback: Playback | undefined
 
     const viewing = (sessionID: string) => {
       const route = context.ui.router.current()
@@ -50,6 +57,8 @@ export default Plugin.define({
         await rpc().relay({ formID: form.id, cancelled: true, message: `the form could not be shown: ${errorText(error)}` }, at(location)).catch(() => {})
         throw error
       }
+      openForms.set(sessionID, { form, location })
+      if (voice.autoRead && voice.tts && viewing(sessionID)) speakForm(form)
       if (!viewing(sessionID)) {
         context.ui.toast.show({ title: "Mathesis question", message: form.title, sessionID, variant: "info", duration: 8000 })
         void context.attention.notify({ title: "Mathesis", message: form.title, notification: { when: "blurred" }, sound: { name: "question" } })
@@ -79,7 +88,10 @@ export default Plugin.define({
         else if (detail.state?.status === "cancelled") {
           await rpc().relay({ formID: question.form.id, cancelled: true, ...(detail.state.message ? { message: detail.state.message } : {}) }, at())
         }
-        else await rpc().shown({ formID: question.form.id }, at())
+        else {
+          await rpc().shown({ formID: question.form.id }, at())
+          openForms.set(question.sessionID, { form: question.form })
+        }
       }
     }
 
@@ -101,6 +113,11 @@ export default Plugin.define({
         rpc().events.on("questionClosed", (event) => {
           const { reason, sessionID, formID } = event.data as { reason: string; sessionID: string; formID: string }
           formLocations.delete(formID)
+          for (const [session, open] of openForms) if (open.form.id === formID) openForms.delete(session)
+          if (recording?.formID === formID) {
+            recording.recording.cancel()
+            recording = undefined
+          }
           changed()
           if (reason === "aborted" || reason === "fallback") {
             void context.client.session.form.cancel({ sessionID, formID, message: "The question was closed." }).catch(() => {})
@@ -348,6 +365,74 @@ export default Plugin.define({
       )
     }
 
+    const info = (message: string, variant: "info" | "success" | "warning" | "error" = "info", duration = 5000) =>
+      context.ui.toast.show({ title: "Mathesis", message, variant, duration })
+
+    function currentForm() {
+      const route = context.ui.router.current()
+      return route.type === "session" ? openForms.get(route.sessionID) : undefined
+    }
+
+    /** First press records, second press transcribes and attaches the text to the open question's thinking. */
+    async function dictate() {
+      if (recording) {
+        const { recording: active, formID, location } = recording
+        recording = undefined
+        info("Transcribing…")
+        let file: string | undefined
+        try {
+          file = await active.stop()
+          const text = await transcribe(voice.stt!, file)
+          if (!text) return info("Nothing was heard.", "warning")
+          const { accepted } = (await rpc().dictation({ formID, text }, at(location))) as { accepted: boolean }
+          if (accepted) info(`Spoken thinking added: ${text}`, "success", 8000)
+          else info("The question was already closed.", "warning")
+        } catch (error) {
+          info(`Dictation failed: ${errorText(error)}`, "error", 8000)
+        } finally {
+          if (file) await rm(file, { force: true })
+        }
+        return
+      }
+      if (!voice.stt) return info("Dictation is off: set the plugin option voice.stt.")
+      const open = currentForm()
+      if (!open) return info("No open Mathesis question in this session.")
+      try {
+        recording = { recording: startRecording(voice), formID: open.form.id, location: open.location }
+        info("Recording… press again to stop.", "info", 60_000)
+      } catch (error) {
+        info(`Could not start recording: ${errorText(error)}`, "error", 8000)
+      }
+    }
+
+    function speakForm(form: FormSpec) {
+      playback?.stop()
+      const current = speak(voice, voice.tts!, spokenQuestion(form))
+      playback = current
+      current.done
+        .catch((error) => info(`Read-aloud failed: ${errorText(error)}`, "error", 8000))
+        .finally(() => {
+          if (playback === current) playback = undefined
+        })
+    }
+
+    /** Reads the open question aloud; a second press stops it. */
+    function readAloud() {
+      if (playback) {
+        playback.stop()
+        playback = undefined
+        return
+      }
+      if (!voice.tts) return info("Read-aloud is off: set the plugin option voice.tts.")
+      const open = currentForm()
+      if (!open) return info("No open Mathesis question in this session.")
+      speakForm(open.form)
+    }
+    stops.push(() => {
+      recording?.recording.cancel()
+      playback?.stop()
+    })
+
     function togglePanel() {
       const route = context.ui.router.current()
       const current = context.ui.panel.current()
@@ -418,6 +503,31 @@ export default Plugin.define({
         },
       ],
       bindings: ["mathesis.panel"],
+    }))
+
+    // Voice commands in their own layer with a high priority, so their keys also work while a question form is open.
+    context.keymap.layer(() => ({
+      mode: "global",
+      priority: 1000,
+      commands: [
+        {
+          id: "mathesis.dictate",
+          title: "Mathesis: dictate thinking for the open question",
+          group: "Mathesis",
+          palette: true,
+          ...(voice.stt ? { bind: voice.dictateKey } : {}),
+          run: () => dictate(),
+        },
+        {
+          id: "mathesis.read",
+          title: "Mathesis: read the open question aloud",
+          group: "Mathesis",
+          palette: true,
+          ...(voice.tts ? { bind: voice.readKey } : {}),
+          run: () => readAloud(),
+        },
+      ],
+      bindings: ["mathesis.dictate", "mathesis.read"],
     }))
 
     return () => stops.forEach((stop) => stop())

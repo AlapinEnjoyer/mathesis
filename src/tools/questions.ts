@@ -71,11 +71,15 @@ async function ask(rt: Runtime, call: CallContext, question: OpenQuestion): Prom
 
   const outcome = await rt.broker.ask(call.sessionID, question, call.signal)
   if (outcome.kind === "fallback") {
+    await call.progress({ status: "the form could not be shown; asking in the chat" }).catch(() => {})
     await mutateSession(rt.store, call.sessionID, (current) => (current.openQuestion?.questionID === question.questionID ? { openQuestion: { ...question, fallback: true } } : {}), rt.now())
     return fallbackText(question)
   }
   if (outcome.kind === "aborted") {
     await clearOpen(rt, call.sessionID, question.questionID)
+    if (outcome.cause === "unload") {
+      return "The Mathesis plugin reloaded and closed the question before the learner answered. This was not the learner, and the form still works: ask the same question again with the same tool."
+    }
     return "The question was interrupted before the learner answered."
   }
   return recordAnswer(rt, call.sessionID, question, outcome.answer, outcome.elapsedMs)
@@ -85,7 +89,7 @@ function fallbackText(question: OpenQuestion): string {
   const lines = [
     "fallback: true",
     `questionID: ${question.questionID}`,
-    "The Mathesis form could not be shown: no Mathesis TUI took the question in time. Do not guess a reason for the learner; if they ask, say that the form could not be shown. Ask the same question another way:",
+    "The Mathesis form could not be shown: no Mathesis TUI took the question in time. Start with one short sentence telling the learner the question form could not be shown, so you ask here instead. Do not guess a reason. Then ask the same question another way:",
     "",
     "- If the built-in `question` tool is available, ask ONE form with two questions:",
     `  1. header "Answer", prompt: the question text${question.kind === "quiz" ? `, choices: ${question.options!.map((o, i) => `"${letter(i)}. ${o}"`).join(", ")}, "I don't know"` : ", free-form answer"}`,

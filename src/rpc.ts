@@ -40,6 +40,11 @@ export const Mathesis = Rpc.define({
       input: obj({ formID: str, answer: { type: "object" }, cancelled: bool, message: str }, ["formID"]),
       output: obj({ accepted: bool }, ["accepted"]),
     },
+    /** Dictated thinking for an open question's form; it is added to the typed thinking when the form is answered. */
+    dictation: {
+      input: obj({ formID: str, text: str }, ["formID", "text"]),
+      output: obj({ accepted: bool }, ["accepted"]),
+    },
     /** Open questions, so a restarted TUI can show them again. */
     pending: {
       input: obj({ sessionID: str }),

@@ -63,12 +63,12 @@ describe("QuestionBroker", () => {
     const { broker, closed } = setup()
     const aborted = new AbortController()
     aborted.abort()
-    expect(await broker.ask("ses", question("a"), aborted.signal)).toEqual({ kind: "aborted" })
+    expect(await broker.ask("ses", question("a"), aborted.signal)).toEqual({ kind: "aborted", cause: "signal" })
     const controller = new AbortController()
     const outcome = broker.ask("ses", question("b"), controller.signal)
     broker.claim("b")
     controller.abort()
-    expect(await outcome).toEqual({ kind: "aborted" })
+    expect(await outcome).toEqual({ kind: "aborted", cause: "signal" })
     expect(closed).toEqual(["aborted"])
     expect(broker.formReplied("frm_mathesis_b", { answer: "0" })).toBe(false)
   })
@@ -100,7 +100,54 @@ describe("QuestionBroker after a claim", () => {
     await new Promise((r) => setTimeout(r, 30))
     expect(broker.isOpen("q1")).toBe(true)
     broker.abortAll()
-    expect(await outcome).toEqual({ kind: "aborted" })
+    expect(await outcome).toEqual({ kind: "aborted", cause: "unload" })
     expect(broker.shown("frm_mathesis_q1")).toBe(false)
+  })
+})
+
+test("showing the form clears the deadline instead of setting a long one", () => {
+  const delays: number[] = []
+  const realSetTimeout = globalThis.setTimeout
+  globalThis.setTimeout = ((fn: () => void, ms?: number) => {
+    delays.push(ms ?? 0)
+    return realSetTimeout(fn, ms)
+  }) as typeof setTimeout
+  try {
+    const broker = new QuestionBroker({ asked: () => {}, closed: () => {} }, { claimTimeoutMs: 50, showTimeoutMs: 60 })
+    void broker.ask("ses", question(), new AbortController().signal)
+    broker.claim("q1")
+    broker.shown("frm_mathesis_q1")
+    expect(delays).toEqual([50, 60])
+    broker.abortAll()
+  } finally {
+    globalThis.setTimeout = realSetTimeout
+  }
+})
+
+describe("QuestionBroker dictation", () => {
+  test("spoken text is added to the typed thinking, also for 'I don't know'", async () => {
+    const { broker } = setup()
+    const first = broker.ask("ses", question("a"), new AbortController().signal)
+    expect(broker.dictation("frm_mathesis_a", " because Paris is the capital ")).toBe(true)
+    expect(broker.dictation("frm_mathesis_a", "and it is in France")).toBe(true)
+    broker.formReplied("frm_mathesis_a", { answer: "0", confidence: "90", thinking: "typed" })
+    expect(await first).toMatchObject({
+      kind: "answer",
+      answer: { status: "answered", thinking: "typed\nSpoken: because Paris is the capital and it is in France" },
+    })
+    const second = broker.ask("ses", question("b"), new AbortController().signal)
+    broker.dictation("frm_mathesis_b", "no idea")
+    broker.formReplied("frm_mathesis_b", { answer: "idk" })
+    expect(await second).toMatchObject({ kind: "answer", answer: { status: "dont_know", thinking: "Spoken: no idea" } })
+  })
+
+  test("dictation for a closed or unknown question, or empty text, is refused", async () => {
+    const { broker } = setup()
+    const outcome = broker.ask("ses", question(), new AbortController().signal)
+    expect(broker.dictation("frm_mathesis_q1", "  ")).toBe(false)
+    broker.formCancelled("frm_mathesis_q1")
+    await outcome
+    expect(broker.dictation("frm_mathesis_q1", "late")).toBe(false)
+    expect(broker.dictation("frm_other", "x")).toBe(false)
   })
 })
