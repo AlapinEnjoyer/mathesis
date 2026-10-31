@@ -402,9 +402,25 @@ export default Plugin.define({
     const info = (message: string, variant: "info" | "success" | "warning" | "error" = "info", duration = 5000) =>
       context.ui.toast.show({ title: "Mathesis", message, variant, duration })
 
-    function currentForm() {
+    /**
+     * The open question form in the session on screen. Another TUI connected to the same server may have claimed and
+     * created it; then this TUI asks the server for the session's open questions and remembers the form.
+     */
+    async function currentForm() {
       const route = context.ui.router.current()
-      return route.type === "session" ? openForms.get(route.sessionID) : undefined
+      if (route.type !== "session") return undefined
+      const known = openForms.get(route.sessionID)
+      if (known) return known
+      const location = context.data.session.get(route.sessionID)?.location as Location | undefined
+      const { questions } = (await rpc()
+        .pending({ sessionID: route.sessionID }, at(location))
+        .catch(() => ({ questions: [] }))) as { questions: { sessionID: string; claimed: boolean; form: FormSpec }[] }
+      const question = questions.find((q) => q.sessionID === route.sessionID && q.claimed)
+      if (!question) return undefined
+      const open = { form: question.form, ...(location ? { location } : {}) }
+      openForms.set(route.sessionID, open)
+      changed()
+      return open
     }
 
     /** First press records, second press transcribes and attaches the text to the open question's thinking. */
@@ -432,7 +448,7 @@ export default Plugin.define({
         return
       }
       if (!voice.stt) return info("Dictation is off: set the plugin option voice.stt.")
-      const open = currentForm()
+      const open = await currentForm()
       if (!open) return info("No open Mathesis question in this session.")
       try {
         recording = { recording: startRecording(voice), formID: open.form.id, location: open.location }
@@ -445,7 +461,7 @@ export default Plugin.define({
 
     /** Drops the last dictation of the open question. */
     async function undoDictation() {
-      const open = currentForm()
+      const open = await currentForm()
       if (!open) return info("No open Mathesis question in this session.")
       try {
         const { accepted, count } = (await rpc().dictation({ formID: open.form.id, undo: true }, at(open.location))) as { accepted: boolean; count: number }
@@ -484,14 +500,14 @@ export default Plugin.define({
     }
 
     /** Reads the open question aloud; a second press stops it. */
-    function readAloud() {
+    async function readAloud() {
       if (playback) {
         playback.stop()
         playback = undefined
         return
       }
       if (!voice.tts) return info("Read-aloud is off: set the plugin option voice.tts.")
-      const open = currentForm()
+      const open = await currentForm()
       if (!open) return info("No open Mathesis question in this session.")
       speakForm(open.form)
     }
