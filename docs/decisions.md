@@ -120,3 +120,13 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   learner pauses by dismissing a form.
 - **The practice phase uses the four modes as question types** (`recall`, `discrimination`, `reverse`,
   `composition`); misconception targets use `discrimination`.
+
+## After the first real use
+
+- **`type` is accepted at the top level or inside `answerKey`.** Models put it inside `answerKey`; the schema no
+  longer requires it at the top level (the host rejected those calls before Mathesis saw them), and the tool refuses a
+  call without either.
+- **The fallback text does not guess a cause.** It says the form could not be shown and tells the agent not to give
+  the learner a reason.
+- **Ids are cut at a word end**, and **topic ids from a goal keep only the content words** (`topicSlug`). Ids are
+  computed once, at creation, so existing notes are not affected.

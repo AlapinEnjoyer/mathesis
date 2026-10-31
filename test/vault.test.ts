@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { review } from "../src/srs/fsrs.ts"
-import { slugify, Vault } from "../src/store/vault.ts"
+import { slugify, topicSlug, Vault } from "../src/store/vault.ts"
 
 const now = new Date("2026-10-30T10:00:00.000Z")
 let root: string
@@ -21,6 +21,20 @@ describe("slugify", () => {
     expect(slugify("How TCP Congestion Control works!")).toBe("how-tcp-congestion-control-works")
     expect(slugify("Ünïcödé — à la carte")).toBe("unicode-a-la-carte")
     expect(slugify("???")).toBe("untitled")
+  })
+
+  test("cuts at a word end", () => {
+    expect(slugify("Airflow triggers one 15-minute refresh for everything", 40)).toBe("airflow-triggers-one-15-minute-refresh")
+    expect(slugify("a-veryveryveryveryverylongwordwithoutbreaks", 20)).toBe("a-veryveryveryveryve")
+  })
+})
+
+describe("topicSlug", () => {
+  test("keeps the content words of a goal", () => {
+    expect(topicSlug("See the current notes I have for task force 3. I would like to learn according to the plan.")).toBe("current-notes-task-force-3-plan")
+    expect(topicSlug("how binary search finds its bounds")).toBe("binary-search-finds-its-bounds")
+    expect(topicSlug("Why is the sky blue?")).toBe("sky-blue")
+    expect(topicSlug("How to")).toBe("how-to")
   })
 })
 

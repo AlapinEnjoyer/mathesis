@@ -25,7 +25,23 @@ export function slugify(text: string, max = 60): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
-  return slug.slice(0, max).replace(/-+$/g, "") || "untitled"
+  if (slug.length <= max) return slug || "untitled"
+  // Cut at a word end, unless that would drop most of the slug.
+  const cut = slug.slice(0, max + 1)
+  const end = cut.lastIndexOf("-")
+  return (end >= max / 2 ? cut.slice(0, end) : slug.slice(0, max)).replace(/-+$/g, "") || "untitled"
+}
+
+/** Words that say how the learner asks, not what about: left out of topic ids made from a goal. */
+const GOAL_FILLER = new Set(
+  "a an the i me my we our you your to for of in on at by with and or about how what why when is are be it this that these those would like want wish need please can could help learn learning understand understanding know see get have has study according".split(" "),
+)
+
+/** A topic id from the learner's goal: the content words, cut at a word end. */
+export function topicSlug(goal: string, max = 40): string {
+  const words = slugify(goal, Number.MAX_SAFE_INTEGER).split("-")
+  const content = words.filter((word) => !GOAL_FILLER.has(word))
+  return slugify((content.length ? content : words).join(" "), max)
 }
 
 export function isSlug(value: unknown): value is string {

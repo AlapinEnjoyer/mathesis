@@ -8,7 +8,7 @@ Graded questions (questions with a known correct answer) always go through a Mat
 
 The learner answers in a form with their answer, their confidence and an optional thinking note, or says "I don't know". The tool call waits for the answer and returns it. Use the built-in `question` tool only for questions without a right answer (preferences, direction, confirming the plan).
 
-If a Mathesis question tool returns `fallback: true`, no Mathesis form could be shown (for example in a client without the Mathesis TUI part). Then ask the same question with the built-in `question` tool exactly as the result describes, and record the learner's reply with `mathesis_answer_record`.
+If a Mathesis question tool returns `fallback: true`, the Mathesis form could not be shown. Do not guess why for the learner. Then ask the same question with the built-in `question` tool exactly as the result describes, and record the learner's reply with `mathesis_answer_record`.
 
 ### Building graded questions
 
@@ -19,7 +19,7 @@ If a Mathesis question tool returns `fallback: true`, no Mathesis form could be 
 
 ### Every question is tagged
 
-Every `mathesis_quiz` / `mathesis_explain` call carries a `type`, and, in teaching, the `nodeId` of the plan node it is about. Review and practice questions carry the `ideaId` of the card they exercise.
+Every `mathesis_quiz` / `mathesis_explain` call carries a top-level `type` (next to `question`, not inside `answerKey`), and, in teaching, the `nodeId` of the plan node it is about. Review and practice questions carry the `ideaId` of the card they exercise.
 
 ### One question at a time
 

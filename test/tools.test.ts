@@ -88,7 +88,7 @@ async function toTeach() {
 describe("probe → teach → card", () => {
   test("the whole flow", async () => {
     const started = await call("topic_start", { goal: "how binary search finds its bounds" })
-    expect(started).toContain("Created topic `how-binary-search-finds-its-bounds`")
+    expect(started).toContain("Created topic `binary-search-finds-its-bounds`")
     expect((await getSession(rt.store, SESSION))?.phase).toBe("probe")
 
     // A reworded goal does not create a second topic.
@@ -106,7 +106,7 @@ describe("probe → teach → card", () => {
     expect(await call("plan_set", { mermaid: PLAN })).toStartWith("Refused:")
     await call("probe_done", { summary: "Ready for intervals", strands: [{ strand: "arrays", floor: "indexing", ceiling: "invariants", misconceptions: ["mid stays in"], buildFrom: "indexing" }] })
     expect((await getSession(rt.store, SESSION))?.phase).toBe("teach")
-    expect((await rt.vault.readTopic("how-binary-search-finds-its-bounds"))?.assessment).toContain("### arrays")
+    expect((await rt.vault.readTopic("binary-search-finds-its-bounds"))?.assessment).toContain("### arrays")
     expect(await call("probe_done", { summary: "x", strands: [{ strand: "a", floor: "f", ceiling: "c", buildFrom: "b" }] })).toContain("not available in the teach phase")
 
     // Teaching needs a plan and plan nodes.
@@ -125,14 +125,14 @@ describe("probe → teach → card", () => {
     const idea = await rt.vault.readIdea("interval")
     expect(idea?.srs?.reps).toBe(1)
     expect(idea?.askedBefore).toEqual(["Which interval keeps the target?"])
-    expect((await rt.vault.readTopic("how-binary-search-finds-its-bounds"))?.ideas).toEqual(["interval"])
+    expect((await rt.vault.readTopic("binary-search-finds-its-bounds"))?.ideas).toEqual(["interval"])
     const log = (await readLog(rt.vault.logPath)).entries
     expect(log).toMatchObject([{ ideaId: "interval", mode: "teach", scheduled: true, rating: "easy", confidence: 90 }])
     expect(events).toContain("cards:+interval~")
     expect(await call("idea_upsert", { questionID: id, claim: "c", why: "w" })).toContain("already used")
 
     // The session note has the question, the answer and the committed answer.
-    const note = await readFile(join(root, "sessions", `${new Date(clock).toISOString().slice(0, 10)}-how-binary-search-finds-its-bounds-learn.md`), "utf8")
+    const note = await readFile(join(root, "sessions", `${new Date(clock).toISOString().slice(0, 10)}-binary-search-finds-its-bounds-learn.md`), "utf8")
     expect(note).toContain("**Answer:** A. [5, 8) · confidence 90% · correct")
     expect(note).toContain("**Committed answer:** A. [5, 8). mid is excluded")
   })
@@ -297,6 +297,14 @@ describe("phase 2 review fixes", () => {
     expect(await call("quiz", quiz({ options: ["A", " ", "B"], answerKey: { explanation: "e", correctIndex: 2 } }))).toContain("non-empty strings")
   })
 
+  test("a `type` inside answerKey is accepted; no type at all is refused", async () => {
+    await toTeach()
+    expect(await call("quiz", quiz({ type: undefined }))).toContain("`type` must be one of")
+    const result = await call("quiz", quiz({ type: undefined, answerKey: { explanation: "e", correctIndex: 0, type: "check" } }))
+    expect(result).toContain("fallback: true")
+    expect((await getSession(rt.store, SESSION))?.openQuestion?.type).toBe("check")
+  })
+
   test("phase_set only moves between probe and teach; topic_status refuses a non-id", async () => {
     await toTeach()
     expect(await call("phase_set", { phase: "review" })).toContain("must be one of: probe, teach")
@@ -309,7 +317,7 @@ describe("phase 2 review fixes", () => {
     const id = lastQuestionID(await call("quiz", quiz({ question: "## Not a heading" })))
     await noteLearnerReply(rt, SESSION)
     expect(await call("answer_record", { questionID: id, choiceIndex: 0, confidence: 250 })).toContain("Confidence: 100%")
-    const note = await readFile(join(root, "sessions", `${clock.toISOString().slice(0, 10)}-how-binary-search-finds-its-bounds-learn.md`), "utf8")
+    const note = await readFile(join(root, "sessions", `${clock.toISOString().slice(0, 10)}-binary-search-finds-its-bounds-learn.md`), "utf8")
     expect(note).toContain("**Question:** \\## Not a heading")
     expect(note).toContain("Recorded by the agent from the learner's reply")
   })
