@@ -64,8 +64,8 @@ With options. opencode passes options to each part from its own config file: the
 }
 ```
 
-From a checkout: `git clone https://github.com/AlapinEnjoyer/mathesis && cd mathesis && bun install`, then put the
-absolute path of the checkout in `plugins`.
+From a checkout: `git clone https://github.com/AlapinEnjoyer/mathesis && cd mathesis && bun install` (this also builds
+the TUI part into `dist/`), then put the absolute path of the checkout in `plugins`.
 
 ## Use
 

@@ -11,6 +11,8 @@ Phase-0 findings about the real opencode API are in `docs/spike.md`; they win ov
   before you use a method.
 
 ## Load locally
+The TUI part loads from `dist/tui.js` (built from `src/tui.tsx` by `bun run build`; `bun install` runs it too). After
+editing TUI code, run `bun run build` and restart opencode. The server part loads `src/server.ts` directly.
 Add the absolute repo path to `plugins` in `~/.config/opencode/opencode.jsonc`, then restart opencode. Set `MATHESIS_VAULT` to use a throwaway vault while testing.
 TUI options (`notify`, `panelKey`, `voice`) are read from `cli.json` (`plugins: [{ package, options }]`), not from
 `opencode.jsonc`.
