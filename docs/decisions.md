@@ -174,3 +174,12 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   well calibrated. Probe answers are not in the log and not counted.
 - **The panel shows progress**: steps of the plan that have a card, and what this session did (from log entries with
   the session id).
+## Note links
+
+- **Every link is a plain relative Markdown link**, so Obsidian and other tools show the graph without a plugin.
+- **A card links its topic** with a `Topic:` line before its first section, added to older cards on their next write.
+  A `Topic:` line the learner wrote is left alone.
+- **Topics are related when a card of one builds on a card of the other.** Both topic notes list the other under
+  **Related topics** (add-only, like **Ideas**).
+- **A session note links its topic and every card it created or touched** (`Card created`, `Card reviewed again`,
+  misconception cards). Review questions already linked their card.

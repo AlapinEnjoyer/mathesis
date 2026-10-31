@@ -192,6 +192,8 @@ created: 2026-10-30
 srs: {state: review, due: 2026-11-04T09:12:00.000Z, stability: 6.2, difficulty: 5.1, reps: 3, lapses: 0, ...}
 ---
 
+Topic: [calculus](../topics/calculus.md)
+
 ## Claim
 ...
 
@@ -205,6 +207,11 @@ Builds on: [derivative as local slope](./derivative-as-local-slope.md)
 ## Asked before
 - earlier question stems, so new reviews use new wording
 ```
+
+The notes link to each other with plain Markdown links, so Obsidian's graph view (or any Markdown tool) shows the
+structure: a card links its topic and the cards it builds on; a topic links its cards and, under **Related topics**,
+other topics whose cards it builds on or that build on it; a session note links its topic and the cards it created,
+reviewed or recorded as misconceptions.
 
 Edit notes freely: Mathesis re-reads them every time, keeps keys and sections it does not know, and never overwrites
 the Claim or Why you wrote. Setting a card's `due` to a past date makes it due.

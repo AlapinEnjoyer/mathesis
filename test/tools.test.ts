@@ -85,6 +85,23 @@ async function toTeach() {
   await call("plan_set", { mermaid: PLAN })
 }
 
+describe("links between notes", () => {
+  test("a card that builds on another topic's card links the topics; the session note links the card", async () => {
+    await rt.vault.updateTopic("arrays", { goal: "arrays" }, new Date(clock))
+    await rt.vault.upsertIdea({ id: "sorted", topic: "arrays", claim: "Sorted" }, new Date(clock))
+    await toTeach()
+    reply = () => ({ answer: "0", confidence: "90" })
+    const id = lastQuestionID(await call("quiz", quiz()))
+    await call("idea_upsert", { questionID: id, claim: "c", why: "w", requires: ["sorted"] })
+    const topic = "binary-search-finds-its-bounds"
+    expect(await readFile(join(root, "topics", `${topic}.md`), "utf8")).toContain("## Related topics\n- [arrays](./arrays.md)")
+    expect(await readFile(join(root, "topics/arrays.md"), "utf8")).toContain(`## Related topics\n- [${topic.replace(/-/g, " ")}](./${topic}.md)`)
+    const note = await readFile(join(root, "sessions", `${new Date(clock).toISOString().slice(0, 10)}-${topic}-learn.md`), "utf8")
+    expect(note).toContain("**Card created:** [interval](../ideas/interval.md)")
+    expect(await readFile(join(root, "ideas/interval.md"), "utf8")).toContain(`Topic: [${topic.replace(/-/g, " ")}](../topics/${topic}.md)`)
+  })
+})
+
 describe("probe → teach → card", () => {
   test("the whole flow", async () => {
     const started = await call("topic_start", { goal: "how binary search finds its bounds" })

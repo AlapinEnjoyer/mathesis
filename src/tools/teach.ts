@@ -1,3 +1,4 @@
+import type { Phase } from "../phases.ts"
 import { parsePlan, planToMermaid, renderPlanTree, storePlan } from "../plan.ts"
 import { Refusal, dueLabel, sessionKind, type Runtime } from "../runtime.ts"
 import { rate, review, type Grade } from "../srs/fsrs.ts"
@@ -233,6 +234,14 @@ export const teachTools: ToolSpec[] = [
           ...(record.elapsedMs !== undefined ? { elapsedMs: record.elapsedMs } : {}),
         })
         await rt.vault.updateTopic(topic, { addIdeas: [id] }, now)
+        // A card that builds on another topic's card connects the two topics.
+        for (const required of slugs(input, "requires", id)) {
+          const other = (await rt.vault.readIdea(required).catch(() => undefined))?.topic
+          if (!other || other === topic || !(await rt.vault.readTopic(other).catch(() => undefined))) continue
+          await rt.vault.updateTopic(topic, { addRelated: [other] }, now)
+          await rt.vault.updateTopic(other, { addRelated: [topic] }, now)
+        }
+        await linkCard(rt, call.sessionID, topic, call.state!.phase, id, created ? "Card created" : "Card reviewed again", now)
         rt.events.cardsChanged({ sessionID: call.sessionID, added: created ? [id] : [], updated: created ? [] : [id] })
         const idea = (await rt.vault.readIdea(id))!
         return `${created ? "Card created" : "Card reviewed again"}: \`${id}\` (rated ${grade}; ${dueLabel(idea, now)}). Continue with the next step.`
@@ -314,6 +323,9 @@ export const teachTools: ToolSpec[] = [
         rating: grade,
       })
       if (topic && (await rt.vault.readTopic(topic).catch(() => undefined))) await rt.vault.updateTopic(topic, { addIdeas: [id] }, now)
+      if (state.topic) {
+        await linkCard(rt, call.sessionID, state.topic, state.phase, id, created ? "Misconception card created" : "Misconception card bumped", now)
+      }
       rt.events.cardsChanged({ sessionID: call.sessionID, added: created ? [id] : [], updated: created ? [] : [id] })
       const next =
         state.phase === "probe"
@@ -325,3 +337,10 @@ export const teachTools: ToolSpec[] = [
     },
   },
 ]
+
+/** Links a card from the session note, so the note shows which cards the session made or touched. */
+async function linkCard(rt: Runtime, sessionID: string, topic: string, phase: Phase, id: string, label: string, now: Date) {
+  await rt.vault
+    .appendSession({ sessionID, topic, kind: sessionKind(phase), date: today(now) }, `**${label}:** [${id.replace(/-/g, " ")}](../ideas/${id}.md)`)
+    .catch(() => {})
+}

@@ -182,6 +182,41 @@ describe("ideas", () => {
   })
 })
 
+describe("links", () => {
+  test("a card links its topic once, before its sections; a learner's Topic line is kept", async () => {
+    await vault.upsertIdea({ id: "a", topic: "calculus", claim: "C" }, now)
+    await vault.upsertIdea({ id: "a", claim: "C2", why: "W" }, now)
+    const text = await readFile(join(root, "ideas/a.md"), "utf8")
+    expect(text).toContain("---\n\nTopic: [calculus](../topics/calculus.md)\n\n## Claim\nC\n")
+    expect(text.match(/Topic:/g)?.length).toBe(1)
+
+    await vault.upsertIdea({ id: "no-topic", claim: "C" }, now)
+    expect(await readFile(join(root, "ideas/no-topic.md"), "utf8")).not.toContain("Topic:")
+
+    await writeFile(join(root, "ideas/mine.md"), "---\nid: mine\ntopic: calculus\n---\nTopic: my own words\n\n## Claim\nX\n")
+    await vault.upsertIdea({ id: "mine", why: "W" }, now)
+    expect(await readFile(join(root, "ideas/mine.md"), "utf8")).toStartWith("---\nid: mine\ntopic: calculus\n---\n\nTopic: my own words\n\n## Claim")
+
+    await writeFile(join(root, "ideas/old.md"), "---\nid: old\ntopic: calculus\n---\n## Claim\nX\n")
+    await vault.upsertIdea({ id: "old", why: "W" }, now)
+    const old = await readFile(join(root, "ideas/old.md"), "utf8")
+    expect(old).toContain("Topic: [calculus](../topics/calculus.md)\n\n## Claim\nX")
+    expect((await vault.readIdea("old"))?.claim).toBe("X")
+  })
+
+  test("related topics are listed once each, never the topic itself", async () => {
+    await vault.updateTopic("calculus", { goal: "g", addRelated: ["algebra", "calculus"] }, now)
+    await vault.updateTopic("calculus", { addRelated: ["algebra", "limits"] }, now)
+    const text = await readFile(join(root, "topics/calculus.md"), "utf8")
+    expect(text).toContain("## Related topics\n- [algebra](./algebra.md)\n- [limits](./limits.md)\n")
+  })
+
+  test("a session note links its topic", async () => {
+    const path = await vault.appendSession({ sessionID: "s", topic: "binary-search", kind: "learn", date: "2026-10-30" }, "x")
+    expect(await readFile(path, "utf8")).toContain("Topic: [binary search](../topics/binary-search.md)")
+  })
+})
+
 describe("paths", () => {
   test("session note paths cannot escape the vault", () => {
     expect(() => vault.sessionNotePath("../../x", "t", "teach")).toThrow(/Invalid session date/)
