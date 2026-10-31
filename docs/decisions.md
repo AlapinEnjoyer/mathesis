@@ -193,3 +193,15 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   show the picture to the model with a note to redraw it in Unicode.
 - **Excalidraw not built.** An Excalidraw MCP server added to opencode would already be callable by the Mathesis agent
   (it denies only file edits and shell); files in the vault were judged too fragile.
+
+## npm package (0.6.1)
+
+- **The TUI part ships compiled** (`dist/tui.js`, built by `scripts/build-tui.ts` with OpenTUI's Bun plugin). opencode
+  compiles a local plugin's `.tsx` with its Solid transform and provides OpenTUI and Solid to it, but loads a package's
+  files as they are: 0.6.0 shipped `src/tui.tsx`, which compiled for React ("Cannot find package 'react'"), and with a
+  `@jsxImportSource` pragma still failed on `@opentui/solid`. Compiled JavaScript gets OpenTUI and Solid from the
+  host, like other v2 TUI plugins (`opencode-cost-details`).
+- **OpenTUI and Solid stay optional peers.** Required peers made npm install its own, newer copies, and the panel
+  stopped updating (two Solid runtimes); pinned exact versions made the install fail against newer `@opencode/plugin`.
+- **The server part ships as TypeScript** (`src/server.ts`); it loaded from npm in 0.6.0.
+- `prepare` and `prepack` build `dist/`, so `bun install` in a checkout and `npm pack`/`npm publish` always include it.

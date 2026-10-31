@@ -1,6 +1,6 @@
 {
   "name": "opencode-mathesis",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Mathesis: probe, teach, practice and spaced repetition for opencode",
   "license": "AGPL-3.0-only",
   "type": "module",
@@ -40,8 +40,10 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "bun run typecheck && bun test && bun run build",
-    "build": "bun scripts/build-tui.ts"
+    "build": "bun scripts/build-tui.ts",
+    "prepare": "bun run build",
+    "prepack": "bun run build",
+    "prepublishOnly": "bun run typecheck && bun test"
   },
   "dependencies": {
     "ts-fsrs": "^6.0.0",
