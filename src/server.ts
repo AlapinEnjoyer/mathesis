@@ -5,11 +5,11 @@ import { resolveConfig } from "./config.ts"
 import { Mathesis, type SetupInput, type StartInput } from "./rpc.ts"
 import type { Runtime } from "./runtime.ts"
 import { panel } from "./panel.ts"
-import { AGENT_NAME, setup, startSession } from "./sessions.ts"
+import { AGENT_NAME, agentExists, setup, startSession } from "./sessions.ts"
 import { status } from "./status.ts"
 import { getSession } from "./state.ts"
-import { Vault } from "./store/vault.ts"
-import { isDueToday } from "./srs/fsrs.ts"
+import { today, Vault } from "./store/vault.ts"
+import { isDueToday, nextDue } from "./srs/fsrs.ts"
 import { NAMESPACE, registerTools } from "./tools/define.ts"
 import { practiceTools } from "./tools/practice.ts"
 import { noteLearnerReply, questionTools } from "./tools/questions.ts"
@@ -72,8 +72,8 @@ export default Plugin.define({
         return { accepted }
       },
       dictation: async (input) => {
-        const { formID, text } = input as { formID: string; text: string }
-        return { accepted: broker.dictation(formID, text) }
+        const { formID, text, undo } = input as { formID: string; text?: string; undo?: boolean }
+        return broker.dictation(formID, { ...(text !== undefined ? { text } : {}), ...(undo ? { undo } : {}) })
       },
       pending: async (input) => {
         const { sessionID } = (input ?? {}) as { sessionID?: string }
@@ -98,8 +98,10 @@ export default Plugin.define({
       },
       status: async () => status(rt),
       due: async () => {
-        const { ideas } = await vault.listIdeas()
-        return { due: ideas.filter((idea) => isDueToday(idea.srs, rt.now())).length }
+        const [{ ideas }, setupNeeded] = await Promise.all([vault.listIdeas(), agentExists(ctx).then((exists) => !exists)])
+        const due = ideas.filter((idea) => isDueToday(idea.srs, rt.now())).length
+        const next = due ? undefined : nextDue(ideas, rt.now())
+        return { due, setupNeeded, ...(next ? { next: today(next) } : {}) }
       },
       panel: async (input) => panel(rt, (input as { sessionID: string }).sessionID),
       setup: async (input) => setup(rt, (input ?? {}) as SetupInput),

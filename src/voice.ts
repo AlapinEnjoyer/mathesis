@@ -17,6 +17,7 @@ export interface VoiceConfig {
   tts?: Endpoint
   autoRead: boolean
   dictateKey: string
+  undoKey: string
   readKey: string
 }
 
@@ -58,6 +59,7 @@ export function parseVoice(value: unknown, os: string = platform()): VoiceConfig
     ...(tts ? { tts } : {}),
     autoRead: raw.autoRead === true,
     dictateKey: text(raw.dictateKey) ?? "<leader>v",
+    undoKey: text(raw.undoKey) ?? "<leader>z",
     readKey: text(raw.readKey) ?? "<leader>o",
   }
 }

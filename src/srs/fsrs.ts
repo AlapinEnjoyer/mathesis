@@ -203,3 +203,11 @@ export function readSrs(value: unknown): Srs | undefined {
     learningSteps: num("learningSteps"),
   }
 }
+
+/** The earliest due date after `now` among the cards, if any. */
+export function nextDue(items: readonly { srs?: Srs }[], now: Date): Date | undefined {
+  return items
+    .map((item) => parseDate(item.srs?.due))
+    .filter((d): d is Date => !!d && d.getTime() > now.getTime())
+    .sort((a, b) => a.getTime() - b.getTime())[0]
+}

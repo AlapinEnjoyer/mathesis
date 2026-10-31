@@ -70,12 +70,12 @@ absolute path of the checkout in `plugins`.
 
 | Command | What it does |
 |---|---|
-| `/mathesis-setup` | Run once. Writes the `mathesis` agent (`~/.config/opencode/agents/mathesis.md`) and the vault folders, and asks whether to use one model for everything. |
+| `/mathesis-setup` | Run once (the first `/learn`, `/recall` or `/practice` offers it). Writes the `mathesis` agent (`~/.config/opencode/agents/mathesis.md`) and the vault folders, and asks whether to use one model for everything. |
 | `/learn <goal>` | Starts a new session, `Mathesis: <goal>`, in the probe phase. `/learn` alone lets you continue a topic. |
 | `/recall [topic]` | Spaced review of the cards due today, interleaved across topics (at most 20 per session). |
 | `/practice [topic]` | Interleaved practice problems built from the cards you hold, weakest first. |
-| `/mathesis` | Status: cards due per topic, recent lapses, misconceptions. |
-| `/mathesis panel`, `/mathesis-panel` | Toggles the side panel: the plan with the current node, and the cards due today. |
+| `/mathesis` | Status: cards due per topic (or the next review date), recent lapses, misconceptions, and your calibration: how often you were right at each confidence you gave. |
+| `/mathesis panel`, `/mathesis-panel` | Toggles the side panel: what this session did so far, the plan with its progress ("3 of 7 steps have a card") and the current node, and the cards due today. |
 
 You don't need the commands every time: switch to the `mathesis` agent and say what you want to learn.
 
@@ -97,8 +97,9 @@ thinking while a question form is open, transcribe it, and add it to the thinkin
 open question aloud. Both are off until you set them in `cli.json`. They run in the TUI process, so with a local
 model your audio never leaves your machine.
 
-- **Dictate:** `ctrl+x v` starts recording, `ctrl+x v` again stops it. A toast shows the transcript. When you submit
-  the form, it is added to your thinking as `Spoken: …`, after anything you typed. It goes to the model with your
+- **Dictate:** `ctrl+x v` starts recording, `ctrl+x v` again stops it. A toast shows the transcript, and a line above
+  the form shows the recording state and how many dictations are attached; `ctrl+x z` removes the last one. When you
+  submit the form, they are added to your thinking as `Spoken: …`, after anything you typed. It goes to the model with your
   answer and into the session note (`sessions/<date>-<topic>-<kind>.md`). It does not appear in the form itself
   (opencode forms can't be changed once shown), and it only works on Mathesis questions, not on opencode's built-in
   question tool.
@@ -164,7 +165,7 @@ in `apiKeyEnv` and is never stored. Your audio (and, for speech, the question te
   returned audio is played with `play` (default `afplay` on macOS, `ffplay` on Linux; `{file}` is the audio file).
 - Recording uses `ffmpeg` (macOS `avfoundation`, Linux PulseAudio). Change it with `record` (`{file}` is the WAV file
   to write). macOS asks once for microphone access for your terminal.
-- Change the keys with `dictateKey` and `readKey`, or bind the commands `mathesis.dictate` and `mathesis.read` in
+- Change the keys with `dictateKey`, `undoKey` and `readKey`, or bind the commands `mathesis.dictate`, `mathesis.dictate-undo` and `mathesis.read` in
   `keybinds`.
 - opencode's own voice feature (realtime voice sessions with OpenAI, xAI or Google) is cloud-only and not available to
   the TUI, so Mathesis does not use it.

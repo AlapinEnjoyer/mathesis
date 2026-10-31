@@ -1,5 +1,6 @@
+import { calibration, calibrationLines } from "./calibration.ts"
 import { cardCount, dueLabel, ideaState, topicIdeas, type Runtime } from "./runtime.ts"
-import { isDueToday, parseDate } from "./srs/fsrs.ts"
+import { isDueToday, nextDue } from "./srs/fsrs.ts"
 import { today } from "./store/vault.ts"
 import { readLog } from "./store/log.ts"
 
@@ -16,10 +17,7 @@ export async function status(rt: Runtime): Promise<{ due: number; cards: number;
   const cards = ideas.filter((idea) => idea.srs)
   const due = cards.filter((idea) => isDueToday(idea.srs, now))
   const lines: string[] = [`${due.length} of ${cardCount(cards.length)} due today.`]
-  const next = cards
-    .map((idea) => parseDate(idea.srs?.due))
-    .filter((d): d is Date => !!d && d.getTime() > now.getTime())
-    .sort((a, b) => a.getTime() - b.getTime())[0]
+  const next = nextDue(cards, now)
   if (!due.length && next) lines.push(`Next review: ${today(next)}.`)
   if (topics.length) {
     lines.push("", "Topics (use the id with /recall <id> or /practice <id>):")
@@ -43,6 +41,8 @@ export async function status(rt: Runtime): Promise<{ due: number; cards: number;
     lines.push("", "Misconceptions:")
     for (const m of misconceptions) lines.push(`  ${m.id} (${ideaState(m, now)}, ${dueLabel(m, now)})`)
   }
+  const calibrated = calibrationLines(calibration(entries))
+  if (calibrated.length) lines.push("", ...calibrated)
   const problems = [...errors, ...topicErrors]
   if (problems.length) {
     lines.push("", "Notes Mathesis could not read:")

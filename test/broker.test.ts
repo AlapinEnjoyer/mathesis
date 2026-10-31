@@ -128,26 +128,37 @@ describe("QuestionBroker dictation", () => {
   test("spoken text is added to the typed thinking, also for 'I don't know'", async () => {
     const { broker } = setup()
     const first = broker.ask("ses", question("a"), new AbortController().signal)
-    expect(broker.dictation("frm_mathesis_a", " because Paris is the capital ")).toBe(true)
-    expect(broker.dictation("frm_mathesis_a", "and it is in France")).toBe(true)
+    expect(broker.dictation("frm_mathesis_a", { text: " because Paris is the capital " })).toEqual({ accepted: true, count: 1 })
+    expect(broker.dictation("frm_mathesis_a", { text: "and it is in France" })).toEqual({ accepted: true, count: 2 })
     broker.formReplied("frm_mathesis_a", { answer: "0", confidence: "90", thinking: "typed" })
     expect(await first).toMatchObject({
       kind: "answer",
       answer: { status: "answered", thinking: "typed\nSpoken: because Paris is the capital and it is in France" },
     })
     const second = broker.ask("ses", question("b"), new AbortController().signal)
-    broker.dictation("frm_mathesis_b", "no idea")
+    broker.dictation("frm_mathesis_b", { text: "no idea" })
     broker.formReplied("frm_mathesis_b", { answer: "idk" })
     expect(await second).toMatchObject({ kind: "answer", answer: { status: "dont_know", thinking: "Spoken: no idea" } })
   })
 
-  test("dictation for a closed or unknown question, or empty text, is refused", async () => {
+  test("undo drops the last dictation", async () => {
     const { broker } = setup()
     const outcome = broker.ask("ses", question(), new AbortController().signal)
-    expect(broker.dictation("frm_mathesis_q1", "  ")).toBe(false)
+    broker.dictation("frm_mathesis_q1", { text: "keep" })
+    broker.dictation("frm_mathesis_q1", { text: "drop" })
+    expect(broker.dictation("frm_mathesis_q1", { undo: true })).toEqual({ accepted: true, count: 1 })
+    broker.formReplied("frm_mathesis_q1", { answer: "1" })
+    expect(await outcome).toMatchObject({ answer: { thinking: "Spoken: keep" } })
+  })
+
+  test("dictation for a closed or unknown question, or empty text, or nothing to undo, is refused", async () => {
+    const { broker } = setup()
+    const outcome = broker.ask("ses", question(), new AbortController().signal)
+    expect(broker.dictation("frm_mathesis_q1", { text: "  " }).accepted).toBe(false)
+    expect(broker.dictation("frm_mathesis_q1", { undo: true }).accepted).toBe(false)
     broker.formCancelled("frm_mathesis_q1")
     await outcome
-    expect(broker.dictation("frm_mathesis_q1", "late")).toBe(false)
-    expect(broker.dictation("frm_other", "x")).toBe(false)
+    expect(broker.dictation("frm_mathesis_q1", { text: "late" }).accepted).toBe(false)
+    expect(broker.dictation("frm_other", { text: "x" }).accepted).toBe(false)
   })
 })
