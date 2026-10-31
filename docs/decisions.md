@@ -142,3 +142,21 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **No TUI presence (hello / heartbeat) and no `ready` event.** The missed claim after a reload did not reproduce in
   five attempts; the claim always arrived within 2 ms. The 4 s claim deadline stays. Revisit if a missed claim happens
   again, with the spike's debug logging.
+
+## Voice (to-dos 2 and 3)
+
+- **Mathesis has its own small voice path; it does not use opencode's.** opencode 2.2.1's voice API
+  (`experimental.voice`) brokers realtime speech-to-speech sessions with OpenAI, xAI or Google and needs a stored API
+  key. Clients with a microphone (Desktop, web) stream audio to it; the TUI and plugins can't use it, and it has no
+  local models, no plain transcription and no TTS.
+- **It runs in the TUI process**, where the microphone and speakers are. Audio never reaches the opencode server.
+  Engines are a local command (whisper.cpp, `say`, piper) or any OpenAI-compatible endpoint (local or cloud, with the
+  key read from a named environment variable). Everything is off until `voice.stt` or `voice.tts` is set.
+- **Dictated text is attached on the side** (the learner's choice). The native form can't be changed after it's
+  created, so the TUI sends the transcript to the server (`dictation`), and the broker adds it to the typed thinking
+  as `Spoken: …` when the form is answered, including "I don't know". Text for a closed question is refused.
+- **Read-aloud covers the open question only** (title and choices, not "I don't know"). Teaching steps can follow.
+- **Keys:** `<leader>v` dictate and `<leader>o` read aloud, both free in opencode 2.2.1. They're bound only when the
+  feature is configured, sit in their own high-priority layer, and work while a form is focused.
+- **TUI options come from `cli.json`**, not `opencode.jsonc` (found while testing: `voice` was empty in the TUI). This
+  also applies to `notify` and `panelKey`; the README now says so.

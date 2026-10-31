@@ -34,9 +34,12 @@ Add the package to `plugins` in `~/.config/opencode/opencode.jsonc` and restart 
 }
 ```
 
-With options:
+With options. opencode passes options to each part from its own config file: the server part reads them from
+`opencode.jsonc`, the TUI part from `~/.config/opencode/cli.json` (the TUI config). The TUI options (`notify`,
+`panelKey`, `voice`) only work in `cli.json`:
 
 ```jsonc
+// ~/.config/opencode/opencode.jsonc
 {
   "plugins": [
     {
@@ -44,11 +47,18 @@ With options:
       "options": {
         "vault": "~/mathesis",
         "models": { "teach": "anthropic/claude-opus-5-5", "recall": "anthropic/claude-sonnet-5-5" },
-        "notify": true,
-        "reviewCap": 20,
-        "panelKey": "ctrl+x m"
+        "reviewCap": 20
       }
     }
+  ]
+}
+```
+
+```jsonc
+// ~/.config/opencode/cli.json
+{
+  "plugins": [
+    { "package": "opencode-mathesis", "options": { "notify": true, "panelKey": "ctrl+x m" } }
   ]
 }
 ```
@@ -79,6 +89,45 @@ it off).
 By default Mathesis uses the model of the session for everything. `/mathesis-setup` (or the `models` option) can choose
 separate models for teaching and for review. A model is only chosen when a session is created and never switched
 inside it, so the provider's prompt cache stays warm.
+
+### Voice (optional)
+
+Thinking out loud is the most useful part of an answer, and speaking is faster than typing. Mathesis can record your
+thinking while a question form is open, transcribe it, and add it to the thinking of your answer. It can also read the
+open question aloud. Both are off until you set them in `cli.json`. They run in the TUI process, so audio stays on your
+machine unless you choose a cloud endpoint.
+
+```jsonc
+// ~/.config/opencode/cli.json
+{
+  "plugins": [
+    {
+      "package": "opencode-mathesis",
+      "options": {
+        "voice": {
+          // Local whisper.cpp (brew install whisper-cpp, then download a ggml model):
+          "stt": { "command": ["whisper-cli", "-m", "~/models/ggml-base.en.bin", "-nt", "-np", "-f", "{file}"] },
+          // or any OpenAI-compatible endpoint, local or cloud:
+          // "stt": { "url": "http://localhost:8000/v1/audio/transcriptions", "model": "whisper-1", "apiKeyEnv": "MY_KEY" },
+          "tts": { "command": ["say"] },   // the text arrives on stdin (macOS say, piper, espeak)
+          "autoRead": false                // read every question aloud when it appears
+        }
+      }
+    }
+  ]
+}
+```
+
+- **Dictate:** `ctrl+x v` starts recording, `ctrl+x v` again stops it. A toast shows the transcript, and it is added to
+  the thinking as `Spoken: …` when you submit the form. You can't edit it in the form.
+- **Read aloud:** `ctrl+x o` reads the open question and its choices; press again to stop.
+- Recording uses `ffmpeg` (macOS `avfoundation`, Linux PulseAudio). Change it with `record` (`{file}` is the WAV
+  file to write), and change the player for endpoint speech with `play`. Change the keys with `dictateKey` and
+  `readKey`, or bind the commands `mathesis.dictate` and `mathesis.read` in `keybinds`.
+- macOS asks once for microphone access for your terminal.
+- An endpoint's API key is read from the environment variable named in `apiKeyEnv`; it is never stored.
+- opencode's own voice feature (realtime voice sessions with OpenAI, xAI or Google) is cloud-only and not available to
+  the TUI, so Mathesis does not use it.
 
 ## The vault
 

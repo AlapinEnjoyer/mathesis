@@ -123,3 +123,31 @@ test("showing the form clears the deadline instead of setting a long one", () =>
     globalThis.setTimeout = realSetTimeout
   }
 })
+
+describe("QuestionBroker dictation", () => {
+  test("spoken text is added to the typed thinking, also for 'I don't know'", async () => {
+    const { broker } = setup()
+    const first = broker.ask("ses", question("a"), new AbortController().signal)
+    expect(broker.dictation("frm_mathesis_a", " because Paris is the capital ")).toBe(true)
+    expect(broker.dictation("frm_mathesis_a", "and it is in France")).toBe(true)
+    broker.formReplied("frm_mathesis_a", { answer: "0", confidence: "90", thinking: "typed" })
+    expect(await first).toMatchObject({
+      kind: "answer",
+      answer: { status: "answered", thinking: "typed\nSpoken: because Paris is the capital and it is in France" },
+    })
+    const second = broker.ask("ses", question("b"), new AbortController().signal)
+    broker.dictation("frm_mathesis_b", "no idea")
+    broker.formReplied("frm_mathesis_b", { answer: "idk" })
+    expect(await second).toMatchObject({ kind: "answer", answer: { status: "dont_know", thinking: "Spoken: no idea" } })
+  })
+
+  test("dictation for a closed or unknown question, or empty text, is refused", async () => {
+    const { broker } = setup()
+    const outcome = broker.ask("ses", question(), new AbortController().signal)
+    expect(broker.dictation("frm_mathesis_q1", "  ")).toBe(false)
+    broker.formCancelled("frm_mathesis_q1")
+    await outcome
+    expect(broker.dictation("frm_mathesis_q1", "late")).toBe(false)
+    expect(broker.dictation("frm_other", "x")).toBe(false)
+  })
+})

@@ -137,3 +137,23 @@ Findings:
   re-claims pending questions there), and give the agent a distinct result when a question ends because the plugin
   unloaded, telling it to ask the same question again with the form. A registry of brokers across instances is not
   needed on this evidence.
+
+## Voice (2026-10-31)
+
+opencode 2.2.1, `--standalone` in tmux, test vault and config folder, stub STT (`echo`) and `say -o <file>` as TTS.
+
+- **opencode's voice API** (`client.experimental.voice.models` / `.session`) creates server-brokered realtime sessions
+  (WebRTC SDP answer or WebSocket token) for OpenAI `gpt-realtime`, xAI and Google. It needs a stored API key ("ChatGPT
+  sign-in can't start voice sessions"). The plugin `Context` has no voice, transcription or speech API;
+  `@opencode/ai` has transcription and speech clients, but the host doesn't provide them to plugins.
+- **TUI plugin options are read from `cli.json`** (`plugins: [{ package, options }]`); options in `opencode.jsonc` reach
+  only the server part. With the options only in `opencode.jsonc`, `context.options.voice` was empty in the TUI.
+- **Keybinds work while a form is open**, also with the text field focused: `ctrl+g` and `<leader>o` ran the commands
+  inside a free-recall form, and `<leader>v` ran on a built-in question. (The first try typed `v` into the field
+  because the binding wasn't registered, since the options were missing.)
+- **ffmpeg recording:** `ffmpeg -f avfoundation -i ":default" -ac 1 -ar 16000 -y x.wav` stopped with SIGINT exits with
+  255 and writes a valid WAV. Recording starts about 0.4 s after the spawn; the first run in a terminal was slower
+  (microphone permission).
+- **End to end:** record → stub transcript → toast "Spoken thinking added: …" → submit → the session note has
+  `**Thinking:** Spoken: …`. `ctrl+x o` wrote the question audio with `say`. The reload message from to-do 1 worked
+  too: after a plugin reload the agent said "form still works" and asked the same question again.

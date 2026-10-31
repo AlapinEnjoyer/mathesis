@@ -29,6 +29,8 @@ interface Entry {
   form: FormSpec
   claimed: boolean
   shown: boolean
+  /** Dictated thinking (TUI speech-to-text), added to the typed thinking when the form is answered. */
+  spoken: string[]
   startedAt: number
   /** Restarts the deadline: claim in time, then show the form in time, else the question falls back. */
   arm: (ms: number) => void
@@ -72,6 +74,7 @@ export class QuestionBroker {
         form,
         claimed: false,
         shown: false,
+        spoken: [],
         startedAt: this.now(),
         arm: (ms) => {
           if (timer) clearTimeout(timer)
@@ -127,11 +130,20 @@ export class QuestionBroker {
     for (const entry of [...this.entries.values()]) entry.finish({ kind: "aborted", cause: "unload" }, "aborted")
   }
 
+  /** Dictated thinking for an open question. Kept until the form is answered. */
+  dictation(formID: string, text: string): boolean {
+    const entry = this.entryForForm(formID)
+    if (!entry || !text.trim()) return false
+    entry.spoken.push(text.trim())
+    return true
+  }
+
   /** A form reply (from the server's event stream, or relayed by a TUI). Unknown or finished forms are ignored. */
   formReplied(formID: string, raw: Record<string, unknown>): boolean {
     const entry = this.entryForForm(formID)
     if (!entry) return false
-    entry.finish({ kind: "answer", answer: parseFormAnswer(entry.question, raw), elapsedMs: this.now() - entry.startedAt }, "answered")
+    const answer = withSpoken(parseFormAnswer(entry.question, raw), entry.spoken)
+    entry.finish({ kind: "answer", answer, elapsedMs: this.now() - entry.startedAt }, "answered")
     return true
   }
 
@@ -159,4 +171,10 @@ export class QuestionBroker {
     const questionID = this.byForm.get(formID)
     return questionID ? this.entries.get(questionID) : undefined
   }
+}
+
+function withSpoken(answer: LearnerAnswer, spoken: string[]): LearnerAnswer {
+  if (answer.status === "cancelled" || spoken.length === 0) return answer
+  const thinking = [answer.thinking, `Spoken: ${spoken.join(" ")}`].filter(Boolean).join("\n")
+  return { ...answer, thinking }
 }

@@ -71,6 +71,10 @@ export default Plugin.define({
         const accepted = cancelled ? broker.formCancelled(formID, message) : answer ? broker.formReplied(formID, answer) : false
         return { accepted }
       },
+      dictation: async (input) => {
+        const { formID, text } = input as { formID: string; text: string }
+        return { accepted: broker.dictation(formID, text) }
+      },
       pending: async (input) => {
         const { sessionID } = (input ?? {}) as { sessionID?: string }
         return { questions: broker.pending(sessionID) } as never
