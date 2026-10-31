@@ -1,3 +1,4 @@
+/** @jsxImportSource @opentui/solid */
 import { rm } from "node:fs/promises"
 import { Plugin } from "@opencode/plugin/tui"
 import type { PanelInput } from "@opencode/plugin/tui/context"
