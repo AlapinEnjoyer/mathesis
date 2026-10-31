@@ -160,3 +160,13 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   feature is configured, sit in their own high-priority layer, and work while a form is focused.
 - **TUI options come from `cli.json`**, not `opencode.jsonc` (found while testing: `voice` was empty in the TUI). This
   also applies to `notify` and `panelKey`; the README now says so.
+
+## Note links
+
+- **Every link is a plain relative Markdown link**, so Obsidian and other tools show the graph without a plugin.
+- **A card links its topic** with a `Topic:` line before its first section, added to older cards on their next write.
+  A `Topic:` line the learner wrote is left alone.
+- **Topics are related when a card of one builds on a card of the other.** Both topic notes list the other under
+  **Related topics** (add-only, like **Ideas**).
+- **A session note links its topic and every card it created or touched** (`Card created`, `Card reviewed again`,
+  misconception cards). Review questions already linked their card.
