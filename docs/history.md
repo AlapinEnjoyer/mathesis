@@ -29,6 +29,7 @@ were checked by hand in the real opencode TUI.
 | 4 | Practice: `/practice` | PR #4 | |
 | 5 | TUI: due count, side panel, daily notification | PR #4 | `v0.5.0` |
 | 6 | README, version 0.5.0, this history | branch `phase-6-publish` | |
+| after use | Live fixes, question deadlines, voice, note links, UX, diagrams, npm packaging | PRs #6–#11 | `v0.6.0` |
 
 Every phase went the same way: build on a branch, test (`bun test`, `tsc`), a review by a separate review agent,
 fixes in an "Apply phase N review fixes" commit, then merge. Phases 3–5 were merged together in one PR, each with its
