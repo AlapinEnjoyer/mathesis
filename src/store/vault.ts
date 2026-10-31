@@ -116,6 +116,8 @@ export interface TopicPatch {
   /** Markdown sections to replace, by heading. */
   sections?: Record<string, string>
   addIdeas?: string[]
+  /** Topics that share cards with this one (a card here builds on a card there, or the other way). */
+  addRelated?: string[]
 }
 
 export interface ListError {
@@ -127,6 +129,19 @@ const ideaLabel = (id: string) => id.replace(/-/g, " ")
 /** The links line Mathesis writes. A line the learner changed no longer matches and is left alone. */
 const BUILDS_ON_OWNED = /^Builds on: \[[^\]\n]+\]\(\.\/[a-z0-9-]+\.md\)(?:, \[[^\]\n]+\]\(\.\/[a-z0-9-]+\.md\))*$/m
 const BUILDS_ON_ANY = /^Builds on:/m
+/** The topic link at the top of a card. A learner-written "Topic:" line is left alone. */
+const TOPIC_LINE = /^Topic:/m
+const topicLine = (topic: string) => `Topic: [${ideaLabel(topic)}](../topics/${topic}.md)`
+
+/** Adds the topic link before the first section, unless the note already has a "Topic:" line there. */
+function withTopicLine(body: string, topic: string | undefined): string {
+  if (!topic) return body
+  const first = body.search(/^## /m)
+  const preamble = first < 0 ? body : body.slice(0, first)
+  if (TOPIC_LINE.test(preamble)) return body
+  const rest = first < 0 ? "" : body.slice(first)
+  return `${preamble.trimEnd() ? preamble.trimEnd() + "\n" : ""}${topicLine(topic)}\n\n${rest}`
+}
 
 function withBuildsOn(why: string, linked: string[]): string {
   if (BUILDS_ON_ANY.test(why) && !BUILDS_ON_OWNED.test(why)) return why
@@ -296,6 +311,8 @@ export class Vault {
         if (patch.about?.length) setField(note, "about", about, { flow: true })
       }
       if (patch.srs) mergeField(note, "srs", { ...patch.srs })
+      const topic = getData(note).topic
+      if (typeof topic === "string" && isSlug(topic)) note.body = withTopicLine(note.body, topic)
 
       const fill = (heading: string, value: string | undefined) => {
         if (value === undefined) return
@@ -417,6 +434,15 @@ export class Vault {
         }
         note.body = setSection(note.body, "Ideas", lines.join("\n"))
       }
+      const related = (patch.addRelated ?? []).filter((other) => other !== id)
+      if (related.length) {
+        const lines = (getSection(note.body, "Related topics") ?? "").split("\n").filter((line) => line.trim())
+        for (const other of related) {
+          assertSlug(other, "topic id")
+          if (!lines.some((line) => line.includes(`(./${other}.md)`))) lines.push(`- [${ideaLabel(other)}](./${other}.md)`)
+        }
+        note.body = setSection(note.body, "Related topics", lines.join("\n"))
+      }
     })
     return toTopic(id, note)
   }
@@ -439,7 +465,7 @@ export class Vault {
         setField(note, "kind", header.kind)
         setField(note, "date", header.date)
         setField(note, "sessions", [header.sessionID], { flow: true })
-        note.body = `# ${ideaLabel(header.topic)}: ${header.kind} (${header.date})\n`
+        note.body = `# ${ideaLabel(header.topic)}: ${header.kind} (${header.date})\n\nTopic: [${ideaLabel(header.topic)}](../topics/${header.topic}.md)\n`
       } else {
         const sessions = getData(note).sessions
         const list = Array.isArray(sessions) ? sessions : []
