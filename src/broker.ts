@@ -5,7 +5,8 @@ export type AskOutcome =
   | { kind: "answer"; answer: LearnerAnswer; elapsedMs: number }
   /** No TUI claimed the question in time: the agent asks another way and records the answer. */
   | { kind: "fallback" }
-  | { kind: "aborted" }
+  /** `signal`: the tool call was aborted. `unload`: the plugin unloaded (a reload); the question can be asked again. */
+  | { kind: "aborted"; cause: "signal" | "unload" }
 
 export type CloseReason = "answered" | "cancelled" | "aborted" | "fallback"
 
@@ -31,6 +32,8 @@ interface Entry {
   startedAt: number
   /** Restarts the deadline: claim in time, then show the form in time, else the question falls back. */
   arm: (ms: number) => void
+  /** The form is on screen: no deadline any more, the question waits for the learner. */
+  disarm: () => void
   finish: (outcome: AskOutcome, reason: CloseReason) => void
 }
 
@@ -57,12 +60,12 @@ export class QuestionBroker {
   }
 
   ask(sessionID: string, question: OpenQuestion, signal: AbortSignal): Promise<AskOutcome> {
-    if (signal.aborted) return Promise.resolve({ kind: "aborted" })
+    if (signal.aborted) return Promise.resolve({ kind: "aborted", cause: "signal" })
     if (this.entries.has(question.questionID)) throw new Error(`Question ${question.questionID} is already open`)
     const form = buildForm(question)
     return new Promise<AskOutcome>((resolve) => {
       let timer: ReturnType<typeof setTimeout> | undefined
-      const onAbort = () => entry.finish({ kind: "aborted" }, "aborted")
+      const onAbort = () => entry.finish({ kind: "aborted", cause: "signal" }, "aborted")
       const entry: Entry = {
         question,
         sessionID,
@@ -75,6 +78,10 @@ export class QuestionBroker {
           timer = setTimeout(() => {
             if (!entry.shown) entry.finish({ kind: "fallback" }, "fallback")
           }, ms)
+        },
+        disarm: () => {
+          if (timer) clearTimeout(timer)
+          timer = undefined
         },
         finish: (outcome, reason) => {
           if (this.entries.get(question.questionID) !== entry) return
@@ -111,13 +118,13 @@ export class QuestionBroker {
     const entry = this.entryForForm(formID)
     if (!entry || !entry.claimed) return false
     entry.shown = true
-    entry.arm(0x7fffffff)
+    entry.disarm()
     return true
   }
 
-  /** Ends every open question (plugin unload): the waiting tools return "interrupted". */
+  /** Ends every open question (plugin unload): the waiting tools tell the agent to ask again. */
   abortAll() {
-    for (const entry of [...this.entries.values()]) entry.finish({ kind: "aborted" }, "aborted")
+    for (const entry of [...this.entries.values()]) entry.finish({ kind: "aborted", cause: "unload" }, "aborted")
   }
 
   /** A form reply (from the server's event stream, or relayed by a TUI). Unknown or finished forms are ignored. */

@@ -105,3 +105,35 @@ restarts.
 - `opencode --standalone` runs a private server, so tests do not touch the user's background service.
 - The host provides `@opencode/plugin` and `effect` at runtime (`runtime-modules`). The version in `package.json` only
   gives types and a fallback; the supported opencode range is stated in the README.
+
+## Plugin reload and the question path (2026-10-31)
+
+Goal: reproduce the missed claim from the first real use (`HANDOFF.md` §7): after a plugin reload, the agent asked
+again and no TUI claimed the question within 4 s.
+
+Setup: a copy of the plugin with a debug log (a random id per module load and per `setup` call, logged on `setup`,
+`cleanup`, `asked`, `claim`, and in the TUI on `questionAsked` and the claim result), a minimal `OPENCODE_CONFIG_DIR`,
+`opencode --standalone` 2.2.1 in tmux, `/learn` with a free model, a multiple-choice form open on screen.
+
+| Trigger, with a form open | Reloads | Next question |
+|---|---|---|
+| `touch package.json` | 1 `setup` | asked 2.7 s later, claimed in 1 ms |
+| Edit `src/server.ts` (content change) | 1, new module instance | asked, claimed in 3 ms |
+| `package.json`, `server.ts`, `package.json` within 0.7 s | 3 `setup` within 0.8 s | asked when requested, claimed in 2 ms |
+| Every file in `src/` and `package.json`, twice within 0.5 s | 2 `setup` | asked 5.8 s later, claimed in 2 ms |
+
+Findings:
+
+- **The missed claim did not reproduce** in these runs. Each reload ran `cleanup` and then `setup` in the same
+  process; the new server part registered the RPC handlers, the TUI kept receiving `questionAsked` without renewing
+  its subscription (no `server.connected`), and its claim reached the new broker. Touching files without changing
+  their content re-runs `setup` but keeps the module instance; a content change loads a new module instance. The
+  incident ran on the background service with a git merge changing many files, which was not repeated here.
+- **Every reload ends the open question.** `cleanup` calls `abortAll`, the waiting tool returns "The question was
+  interrupted before the learner answered.", and the agent cannot tell this from the learner leaving. After three
+  interruptions the agent concluded that "the question form isn't reaching you" and switched to plain chat questions
+  for the rest of the session.
+- Consequences for the fix: keep a cheap guard for the reload case (the new server part announces itself, the TUI
+  re-claims pending questions there), and give the agent a distinct result when a question ends because the plugin
+  unloaded, telling it to ask the same question again with the form. A registry of brokers across instances is not
+  needed on this evidence.

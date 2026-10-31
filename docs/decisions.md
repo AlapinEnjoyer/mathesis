@@ -130,3 +130,15 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   the learner a reason.
 - **Ids are cut at a word end**, and **topic ids from a goal keep only the content words** (`topicSlug`). Ids are
   computed once, at creation, so existing notes are not affected.
+
+## Question deadlines (to-do 1)
+
+- **A shown form has no deadline.** `shown` clears the timer instead of re-arming it for ~24.8 days.
+- **A plugin reload says so.** `abortAll` (plugin unload) ends questions with cause `unload`; the tool tells the agent
+  the form still works and to ask again. In the reload spike (`docs/spike.md`) the generic "interrupted" text made the
+  agent give up on forms after three reloads.
+- **A fallback is announced.** The tool sets its progress to "the form could not be shown; asking in the chat", and the
+  agent tells the learner in one sentence before asking another way.
+- **No TUI presence (hello / heartbeat) and no `ready` event.** The missed claim after a reload did not reproduce in
+  five attempts; the claim always arrived within 2 ms. The 4 s claim deadline stays. Revisit if a missed claim happens
+  again, with the spike's debug logging.
