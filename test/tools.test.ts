@@ -155,6 +155,13 @@ describe("probe → teach → card", () => {
     expect(idea?.srs?.reps).toBe(1)
     expect(idea?.askedBefore).toEqual(["Which interval keeps the target?"])
     expect((await rt.vault.readTopic("binary-search-finds-its-bounds"))?.ideas).toEqual(["interval"])
+    // The plan step now links to its card; the others stay plain, and each step has a single bullet.
+    const topicNote = await readFile(join(root, "topics", "binary-search-finds-its-bounds.md"), "utf8")
+    expect(topicNote).toContain("- [Half-open interval](../ideas/interval.md) (needs Sorted array)")
+    expect(topicNote).toMatch(/^- Sorted array$/m)
+    expect(topicNote).not.toContain("- ·")
+    // A flat due date next to srs, for Obsidian.
+    expect(await readFile(join(root, "ideas", "interval.md"), "utf8")).toMatch(/^due: \d{4}-\d{2}-\d{2}$/m)
     const log = (await readLog(rt.vault.logPath)).entries
     expect(log).toMatchObject([{ ideaId: "interval", mode: "teach", scheduled: true, rating: "easy", confidence: 90 }])
     expect(events).toContain("cards:+interval~")

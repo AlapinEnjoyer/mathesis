@@ -1,5 +1,5 @@
 import type { Phase } from "../phases.ts"
-import { parsePlan, planToMermaid, renderPlanTree, storePlan } from "../plan.ts"
+import { parsePlan, planToMermaid, readPlan, renderPlanTree, storePlan, type Plan } from "../plan.ts"
 import { Refusal, dueLabel, sessionKind, type Runtime } from "../runtime.ts"
 import { rate, review, type Grade } from "../srs/fsrs.ts"
 import { mutateSession, setPhase, updateSession, type AnswerRecord, type SessionState } from "../state.ts"
@@ -131,7 +131,7 @@ export const teachTools: ToolSpec[] = [
         topic,
         {
           fields: { plan: storePlan(plan) },
-          sections: { Plan: ["```mermaid", planToMermaid(plan), "```", "", "Foundations first:", "", renderPlanTree(plan, undefined, { list: true })].join("\n") },
+          sections: { Plan: planSection(plan, (await rt.vault.readTopic(topic).catch(() => undefined))?.ideas ?? []) },
         },
         rt.now(),
       )
@@ -236,7 +236,7 @@ export const teachTools: ToolSpec[] = [
           rating: grade,
           ...(record.elapsedMs !== undefined ? { elapsedMs: record.elapsedMs } : {}),
         })
-        await rt.vault.updateTopic(topic, { addIdeas: [id] }, now)
+        await addToTopic(rt, topic, id, now)
         // A card that builds on another topic's card connects the two topics.
         for (const required of slugs(input, "requires", id)) {
           const other = (await rt.vault.readIdea(required).catch(() => undefined))?.topic
@@ -325,7 +325,7 @@ export const teachTools: ToolSpec[] = [
         ...(record?.confidence !== undefined ? { confidence: record.confidence } : {}),
         rating: grade,
       })
-      if (topic && (await rt.vault.readTopic(topic).catch(() => undefined))) await rt.vault.updateTopic(topic, { addIdeas: [id] }, now)
+      if (topic && (await rt.vault.readTopic(topic).catch(() => undefined))) await addToTopic(rt, topic, id, now)
       if (state.topic) {
         await linkCard(rt, call.sessionID, state.topic, state.phase, id, created ? "Misconception card created" : "Misconception card bumped", now)
       }
@@ -340,6 +340,21 @@ export const teachTools: ToolSpec[] = [
     },
   },
 ]
+
+/** The topic note's Plan section: the map, then the steps foundations first; a step that has a card links to it. */
+function planSection(plan: Plan, cards: Iterable<string>): string {
+  const have = new Set(cards)
+  const link = (id: string) => (have.has(id) ? `../ideas/${id}.md` : undefined)
+  return ["```mermaid", planToMermaid(plan), "```", "", "Foundations first:", "", renderPlanTree(plan, undefined, { list: true, link })].join("\n")
+}
+
+/** Lists a card in the topic note, and links its plan step when the card is one. */
+async function addToTopic(rt: Runtime, topic: string, id: string, now: Date) {
+  const current = await rt.vault.readTopic(topic)
+  const plan = readPlan(current?.data.plan)
+  const Plan = plan?.nodes.some((node) => node.id === id) ? planSection(plan, [...current!.ideas, id]) : undefined
+  await rt.vault.updateTopic(topic, { addIdeas: [id], ...(Plan ? { sections: { Plan } } : {}) }, now)
+}
 
 /** Links a card from the session note, so the note shows which cards the session made or touched. */
 async function linkCard(rt: Runtime, sessionID: string, topic: string, phase: Phase, id: string, label: string, now: Date) {
