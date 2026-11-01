@@ -69,8 +69,30 @@ export const expand = (args: string[], file: string) => args.map((arg) => expand
 
 const tempFile = (ext: string) => join(tmpdir(), `mathesis-${randomUUID()}.${ext}`)
 
+/** Starts a program, with a readable error when it is not installed. */
+function installed<T>(args: string[], start: () => T): T {
+  try {
+    return start()
+  } catch (error) {
+    if ((error as { code?: string }).code === "ENOENT") throw new Error(`${args[0]} was not found; is it installed and on PATH?`)
+    throw error
+  }
+}
+
+/** A fetch that says which server could not be reached, instead of a bare network error. */
+async function post(fetchImpl: typeof fetch, url: string, init: RequestInit, what: string) {
+  try {
+    return await fetchImpl(url, init)
+  } catch (error) {
+    const origin = URL.canParse(url) ? new URL(url).host : url
+    throw new Error(`no ${what} server answers at ${origin}; is it running? (README, "Voice")`, { cause: error })
+  }
+}
+
 async function run(args: string[], stdin?: string) {
-  const proc = Bun.spawn(args, { stdin: stdin === undefined ? "ignore" : Buffer.from(stdin), stdout: "pipe", stderr: "pipe" })
+  const proc = installed(args, () =>
+    Bun.spawn(args, { stdin: stdin === undefined ? "ignore" : Buffer.from(stdin), stdout: "pipe", stderr: "pipe" }),
+  )
   const [out, err, code] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text(), proc.exited])
   if (code !== 0) throw new Error(`${args[0]} failed (${code}): ${err.trim().slice(0, 300)}`)
   return out
@@ -91,7 +113,8 @@ export interface Recording {
 
 export function startRecording(config: VoiceConfig): Recording {
   const file = tempFile("wav")
-  const proc = Bun.spawn(expand(config.record, file), { stdin: "ignore", stdout: "ignore", stderr: "pipe" })
+  const args = expand(config.record, file)
+  const proc = installed(args, () => Bun.spawn(args, { stdin: "ignore", stdout: "ignore", stderr: "pipe" }))
   return {
     async stop() {
       // ffmpeg finishes the file on SIGINT and exits with 255, so judge by the file, not the exit code.
@@ -119,7 +142,7 @@ export async function transcribe(endpoint: Endpoint, file: string, fetchImpl: ty
   const body = new FormData()
   body.append("file", Bun.file(file), "speech.wav")
   body.append("model", endpoint.model)
-  const response = await fetchImpl(endpoint.url, { method: "POST", headers: authorization(endpoint), body })
+  const response = await post(fetchImpl, endpoint.url, { method: "POST", headers: authorization(endpoint), body }, "transcription")
   if (!response.ok) throw new Error(`transcription failed (${response.status}): ${(await response.text()).slice(0, 300)}`)
   const result = (await response.json()) as { text?: unknown }
   return typeof result.text === "string" ? oneLine(result.text) : ""
@@ -135,16 +158,21 @@ export function speak(config: VoiceConfig, endpoint: Endpoint, text: string, fet
   let proc: ReturnType<typeof Bun.spawn> | undefined
   let stopped = false
   const start = (args: string[], stdin?: string) => {
-    proc = Bun.spawn(args, { stdin: stdin === undefined ? "ignore" : Buffer.from(stdin), stdout: "ignore", stderr: "ignore" })
+    proc = installed(args, () => Bun.spawn(args, { stdin: stdin === undefined ? "ignore" : Buffer.from(stdin), stdout: "ignore", stderr: "ignore" }))
     return proc.exited
   }
   const done = (async () => {
     if ("command" in endpoint) return void (await start(expand(endpoint.command, ""), text))
-    const response = await fetchImpl(endpoint.url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...authorization(endpoint) },
-      body: JSON.stringify({ model: endpoint.model, input: text, response_format: "wav", ...(endpoint.voice ? { voice: endpoint.voice } : {}) }),
-    })
+    const response = await post(
+      fetchImpl,
+      endpoint.url,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authorization(endpoint) },
+        body: JSON.stringify({ model: endpoint.model, input: text, response_format: "wav", ...(endpoint.voice ? { voice: endpoint.voice } : {}) }),
+      },
+      "speech",
+    )
     if (!response.ok) throw new Error(`speech failed (${response.status}): ${(await response.text()).slice(0, 300)}`)
     const file = tempFile("wav")
     await Bun.write(file, await response.arrayBuffer())
@@ -170,4 +198,27 @@ export function spokenQuestion(form: { title: string; fields: unknown[] }): stri
     | undefined
   const choices = (answer?.options ?? []).filter((option) => /^\d+$/.test(option.value))
   return [form.title, ...choices.map((option, index) => `${String.fromCharCode(65 + index)}: ${option.label}.`)].join("\n")
+}
+
+/** The question form with a dictation hint on the thinking field, so the learner sees that they can speak. */
+export function withDictationHint<T extends { fields: unknown[] }>(form: T, key: string | undefined): T {
+  if (!key) return form
+  const fields = form.fields.map((field) => {
+    const f = field as { key?: string; description?: string }
+    if (f.key !== "thinking") return field
+    return { ...f, description: `${f.description ?? "Think out loud"} Or press ${key} and say it.` }
+  })
+  return { ...form, fields }
+}
+
+/** The start of a transcript, for the status line. */
+export function preview(text: string, max = 36): string {
+  const clean = oneLine(text)
+  return clean.length <= max ? clean : `${clean.slice(0, max - 1).trimEnd()}…`
+}
+
+/** Recording time as m:ss. */
+export function elapsed(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000))
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`
 }

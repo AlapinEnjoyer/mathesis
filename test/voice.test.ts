@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { buildForm } from "../src/questions.ts"
-import { expand, parseVoice, speak, spokenQuestion, transcribe } from "../src/voice.ts"
+import { elapsed, expand, parseVoice, preview, speak, spokenQuestion, transcribe, withDictationHint } from "../src/voice.ts"
 
 describe("parseVoice", () => {
   test("off by default, with recorder and player defaults per OS", () => {
@@ -98,4 +98,39 @@ test("spokenQuestion reads the question and the choices, not 'I don't know'", ()
     askedAt: "2026-10-31T10:00:00.000Z",
   })
   expect(spokenQuestion(form)).toBe("Which?\nA: Paris.\nB: Rome.")
+})
+
+describe("readable failures", () => {
+  test("an unreachable server is named, not a bare network error", async () => {
+    const down = (async () => {
+      throw new TypeError("Unable to connect")
+    }) as unknown as typeof fetch
+    const file = join(import.meta.dir, "fixtures", "missing.wav")
+    await expect(transcribe({ url: "http://127.0.0.1:8178/v1/audio/transcriptions", model: "whisper-1" }, file, down)).rejects.toThrow(
+      "no transcription server answers at 127.0.0.1:8178",
+    )
+  })
+
+  test("a program that is not installed says so", async () => {
+    await expect(transcribe({ command: ["mathesis-no-such-program", "{file}"] }, "x.wav")).rejects.toThrow("was not found")
+  })
+})
+
+describe("status line helpers", () => {
+  test("the thinking field gets the dictation key; other fields and no key stay as they are", () => {
+    const form = buildForm({ questionID: "q1", kind: "explain", stem: "Why?" } as never)
+    const hinted = withDictationHint(form, "ctrl+x v")
+    const thinking = hinted.fields.find((f) => (f as { key: string }).key === "thinking") as { description: string }
+    expect(thinking.description).toEndWith("Or press ctrl+x v and say it.")
+    expect(hinted.fields[0]).toBe(form.fields[0])
+    expect(withDictationHint(form, undefined)).toBe(form)
+  })
+
+  test("preview shortens long transcripts; elapsed is m:ss", () => {
+    expect(preview("short one")).toBe("short one")
+    const long = preview("a news app should base the recommendations on topics and freshness", 30)
+    expect(long.length).toBeLessThanOrEqual(30)
+    expect(long).toEndWith("…")
+    expect([elapsed(0), elapsed(14_900), elapsed(75_000)]).toEqual(["0:00", "0:14", "1:15"])
+  })
 })
