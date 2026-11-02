@@ -20,6 +20,8 @@ export const ASKED_BEFORE_LIMIT = 10
 
 export function slugify(text: string, max = 60): string {
   const slug = text
+    // A file the learner pointed at ("@notes/Homepage overview.md") names the topic without its extension.
+    .replace(/\.(md|markdown|txt|pdf|docx?|html?)\b/gi, " ")
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
@@ -322,7 +324,7 @@ export class Vault {
         if (patch.requires?.length) setField(note, "requires", requires, { flow: true })
         if (patch.about?.length) setField(note, "about", about, { flow: true })
       }
-      if (patch.srs) mergeField(note, "srs", { ...patch.srs })
+      if (patch.srs) writeSrs(note, patch.srs)
       const topic = getData(note).topic
       if (typeof topic === "string" && isSlug(topic)) note.body = withTopicLine(note.body, topic)
 
@@ -363,7 +365,7 @@ export class Vault {
       const idea = toIdea(id, note)
       const after = change(idea.srs, idea)
       if (after) {
-        mergeField(note, "srs", { ...after })
+        writeSrs(note, after)
         await this.writeNote(path, note)
       }
       return { ...(idea.srs ? { before: idea.srs } : {}), ...(after ? { after } : {}) }
@@ -372,7 +374,7 @@ export class Vault {
 
   /** Writes FSRS state key by key, so unknown keys and comments inside `srs` survive. */
   async setSrs(id: string, srs: Srs): Promise<void> {
-    await this.updateExisting(id, (note) => mergeField(note, "srs", { ...srs }))
+    await this.updateExisting(id, (note) => writeSrs(note, srs))
   }
 
   /**
@@ -520,6 +522,16 @@ function toIdea(id: string, note: Note): Idea {
     misconceptions: getSection(note.body, "Known misconceptions") ?? "",
     askedBefore: splitList(getSection(note.body, "Asked before")).items,
   }
+}
+
+/**
+ * Writes FSRS state key by key (unknown keys and comments inside `srs` survive), plus a flat `due` date. Obsidian
+ * can't show the nested `srs` map, but it shows, sorts and filters a date. `due` is for reading only; `srs` decides.
+ */
+function writeSrs(note: Note, srs: Srs) {
+  mergeField(note, "srs", { ...srs })
+  const due = new Date(srs.due)
+  setField(note, "due", Number.isNaN(due.getTime()) ? undefined : today(due))
 }
 
 function toTopic(id: string, note: Note): Topic {

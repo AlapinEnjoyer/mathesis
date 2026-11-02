@@ -188,6 +188,13 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   **Related topics** (add-only, like **Ideas**).
 - **A session note links its topic and every card it created or touched** (`Card created`, `Card reviewed again`,
   misconception cards). Review questions already linked their card.
+- **Plan steps link to their cards** in the topic note's "Foundations first" list, once the card exists. The Plan
+  section is rewritten when a plan step gets its card (it was already machine-written by `plan_set`). Steps without a
+  card stay plain text: a link to a missing note would let a click in Obsidian create an empty card file. The mermaid
+  map stays unlinked for the same reason (Obsidian's `internal-link` class links by label, and labels are titles).
+- **A flat `due` date** (local calendar day) is written next to `srs` on every schedule change, because Obsidian's
+  Properties panel can't show nested maps. It is display only; `srs.due` decides.
+- **Topic ids drop file extensions** (`.md`, `.txt`, `.pdf`, …) when made from a goal that names a file.
 
 ## Diagrams
 

@@ -21,6 +21,8 @@ describe("slugify", () => {
     expect(slugify("How TCP Congestion Control works!")).toBe("how-tcp-congestion-control-works")
     expect(slugify("Ünïcödé — à la carte")).toBe("unicode-a-la-carte")
     expect(slugify("???")).toBe("untitled")
+    expect(slugify("@Tech/Focus homepage personalization.md")).toBe("tech-focus-homepage-personalization")
+    expect(slugify("node.js event loop")).toBe("node-js-event-loop")
   })
 
   test("cuts at a word end", () => {

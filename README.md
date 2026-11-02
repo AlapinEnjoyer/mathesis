@@ -193,6 +193,7 @@ kind: proposition
 requires: [derivative-as-local-slope]
 created: 2026-10-30
 srs: {state: review, due: 2026-11-04T09:12:00.000Z, stability: 6.2, difficulty: 5.1, reps: 3, lapses: 0, ...}
+due: 2026-11-04
 ---
 
 Topic: [calculus](../topics/calculus.md)
@@ -220,7 +221,11 @@ graph LR
 The notes link to each other with plain Markdown links, so Obsidian's graph view (or any Markdown tool) shows the
 structure: a card links its topic and the cards it builds on; a topic links its cards and, under **Related topics**,
 other topics whose cards it builds on or that build on it; a session note links its topic and the cards it created,
-reviewed or recorded as misconceptions.
+reviewed or recorded as misconceptions. In a topic's plan list, each step that already has a card links to it.
+
+In Obsidian, `srs` (and a topic's `plan`) show as raw text in the Properties panel, because Obsidian can't display
+nested values. Don't edit them there. `due` repeats the next review date as a plain date that Obsidian can show, sort
+and filter; Mathesis only writes it, and `srs` decides.
 
 When an idea is a structure or a flow, the model draws it: a small Unicode diagram in the chat (the terminal does not
 render mermaid), and a mermaid diagram in the card's **Picture** section, which Obsidian renders.
