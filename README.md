@@ -98,8 +98,10 @@ thinking while a question form is open, transcribe it, and add it to the thinkin
 open question aloud. Both are off until you set them in `cli.json`. They run in the TUI process, so with a local
 model your audio never leaves your machine.
 
-- **Dictate:** `ctrl+x v` starts recording, `ctrl+x v` again stops it. A toast shows the transcript, and a line above
-  the form shows the recording state and how many dictations are attached; `ctrl+x z` removes the last one. When you
+- **Dictate:** `ctrl+x v` starts recording, `ctrl+x v` again stops it (the form's thinking field reminds you of the
+  key). A line above the form shows a recording timer, then the start of what was heard and how many dictations are
+  attached; `ctrl+x z` removes the last one. If the transcription server isn't running, the error says which address
+  it tried. When you
   submit the form, they are added to your thinking as `Spoken: …`, after anything you typed. It goes to the model with your
   answer and into the session note (`sessions/<date>-<topic>-<kind>.md`). It does not appear in the form itself
   (opencode forms can't be changed once shown), and it only works on Mathesis questions, not on opencode's built-in

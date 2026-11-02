@@ -5,7 +5,7 @@ import type { PanelInput } from "@opencode/plugin/tui/context"
 import { createEffect, createSignal, For, on, Show } from "solid-js"
 import { localDate, shouldNotify } from "./notify.ts"
 import { Mathesis, type ModelRefInput } from "./rpc.ts"
-import { parseVoice, speak, spokenQuestion, startRecording, transcribe, type Playback, type Recording } from "./voice.ts"
+import { elapsed, parseVoice, preview, speak, spokenQuestion, startRecording, transcribe, withDictationHint, type Playback, type Recording } from "./voice.ts"
 
 type Context = Plugin.Context
 type FormSpec = { id: string; title: string; fields: unknown[]; metadata?: Record<string, unknown> }
@@ -35,12 +35,26 @@ export default Plugin.define({
     /** The question form on screen in each session, for dictation and read-aloud. */
     const openForms = new Map<string, { form: FormSpec; location?: Location }>()
     let recording: { recording: Recording; formID: string; location?: Location } | undefined
-    /** What the dictation status line shows: the recorder's state, and how many dictations each open form holds. */
-    const [dictation, setDictation] = createSignal<{ state: "idle" | "recording" | "transcribing"; formID?: string; counts: Record<string, number> }>({
-      state: "idle",
-      counts: {},
-    })
-    const setCount = (formID: string, count: number) => setDictation((d) => ({ ...d, counts: { ...d.counts, [formID]: count } }))
+    /**
+     * What the dictation status line shows: the recorder's state and start time, how many dictations each open form
+     * holds, and the transcripts this window heard for it (for the preview).
+     */
+    const [dictation, setDictation] = createSignal<{
+      state: "idle" | "recording" | "transcribing"
+      formID?: string
+      since?: number
+      counts: Record<string, number>
+      heard: Record<string, string[]>
+    }>({ state: "idle", counts: {}, heard: {} })
+    const setCount = (formID: string, count: number, heard: string[]) =>
+      setDictation((d) => ({ ...d, counts: { ...d.counts, [formID]: count }, heard: { ...d.heard, [formID]: heard } }))
+    // Ticks once a second while recording, for the timer in the status line.
+    const [clock, setClock] = createSignal(Date.now())
+    let clockTimer: ReturnType<typeof setInterval> | undefined
+    const stopClock = () => {
+      if (clockTimer) clearInterval(clockTimer)
+      clockTimer = undefined
+    }
     let playback: Playback | undefined
 
     const viewing = (sessionID: string) => {
@@ -52,7 +66,8 @@ export default Plugin.define({
       formLocations.set(form.id, location)
       try {
         try {
-          await context.client.session.form.create({ sessionID, ...form } as never)
+          const shown = voice.stt ? withDictationHint(form, key("mathesis.dictate")) : form
+          await context.client.session.form.create({ sessionID, ...shown } as never)
         } catch (error) {
           // A form with this id already exists (another TUI, or a restart): nothing to do.
           const existing = await context.client.session.form.get({ sessionID, formID: form.id }).catch(() => undefined)
@@ -125,9 +140,11 @@ export default Plugin.define({
             recording.recording.cancel()
             recording = undefined
           }
+          if (dictation().formID === formID) stopClock()
           setDictation((d) => {
             const { [formID]: _, ...counts } = d.counts
-            return { ...(d.formID === formID ? { state: "idle" as const } : { state: d.state, formID: d.formID }), counts }
+            const { [formID]: __, ...heard } = d.heard
+            return { ...(d.formID === formID ? { state: "idle" as const } : { state: d.state, formID: d.formID, since: d.since }), counts, heard }
           })
           changed()
           if (reason === "aborted" || reason === "fallback") {
@@ -429,6 +446,7 @@ export default Plugin.define({
       if (recording) {
         const { recording: active, formID, location } = recording
         recording = undefined
+        stopClock()
         setDictation((d) => ({ ...d, state: "transcribing", formID }))
         let file: string | undefined
         try {
@@ -437,7 +455,7 @@ export default Plugin.define({
           if (!text) return info("Nothing was heard.", "warning")
           const { accepted, count } = (await rpc().dictation({ formID, text }, at(location))) as { accepted: boolean; count: number }
           if (accepted) {
-            setCount(formID, count)
+            setCount(formID, count, [...(dictation().heard[formID] ?? []), text])
             info(`Spoken thinking added: ${text}`, "success", 8000)
           } else info("The question was already closed.", "warning")
         } catch (error) {
@@ -453,8 +471,10 @@ export default Plugin.define({
       if (!open) return info("No open Mathesis question in this session.")
       try {
         recording = { recording: startRecording(voice), formID: open.form.id, location: open.location }
-        setDictation((d) => ({ ...d, state: "recording", formID: open.form.id }))
-        info("Recording… press again to stop.", "info", 3000)
+        const since = Date.now()
+        setClock(since)
+        clockTimer = setInterval(() => setClock(Date.now()), 1000)
+        setDictation((d) => ({ ...d, state: "recording", formID: open.form.id, since }))
       } catch (error) {
         info(`Could not start recording: ${errorText(error)}`, "error", 8000)
       }
@@ -466,7 +486,7 @@ export default Plugin.define({
       if (!open) return info("No open Mathesis question in this session.")
       try {
         const { accepted, count } = (await rpc().dictation({ formID: open.form.id, undo: true }, at(open.location))) as { accepted: boolean; count: number }
-        setCount(open.form.id, count)
+        setCount(open.form.id, count, accepted ? (dictation().heard[open.form.id] ?? []).slice(0, -1) : (dictation().heard[open.form.id] ?? []))
         info(accepted ? `Last dictation removed${count ? ` (${count} left)` : ""}.` : "Nothing dictated for this question.", accepted ? "success" : "info")
       } catch (error) {
         info(errorText(error), "error")
@@ -481,12 +501,16 @@ export default Plugin.define({
       const formID = openForms.get(sessionID)?.form.id
       if (!formID) return undefined
       const stop = key("mathesis.dictate")
-      if (d.formID === formID && d.state === "recording") return `● Recording your thinking${stop ? ` · ${stop} to stop` : ""}`
+      if (d.formID === formID && d.state === "recording") {
+        return `● Recording ${elapsed(clock() - (d.since ?? clock()))}${stop ? ` · ${stop} to stop` : ""}`
+      }
       if (d.formID === formID && d.state === "transcribing") return "Transcribing…"
       const count = d.counts[formID] ?? 0
       if (!count) return undefined
       const undo = key("mathesis.dictate-undo")
-      return `Spoken thinking attached (${count}), added when you submit${undo ? ` · ${undo} removes the last` : ""}`
+      const last = d.heard[formID]?.at(-1)
+      const said = last ? `: "${preview(last)}"` : " attached"
+      return `Spoken (${count})${said}, added on submit${undo ? ` · ${undo} undo` : ""}`
     }
 
     function speakForm(form: FormSpec) {
@@ -514,6 +538,7 @@ export default Plugin.define({
     }
     stops.push(() => {
       recording?.recording.cancel()
+      stopClock()
       playback?.stop()
     })
 

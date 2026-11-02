@@ -166,6 +166,11 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **Dictation has a status line** above the form (`session.composer.top`): recording, transcribing, or how many
   dictations are attached. The recording toast is short now; `ctrl+x z` (`mathesis.dictate-undo`) drops the last
   dictation (RPC `dictation` with `undo`).
+- **Dictation, second pass:** the status line shows a recording timer (`● Recording 0:14`) instead of the recording
+  toast, and after transcription the start of the last transcript (the toast disappears after 8 s). The TUI adds the
+  dictate key to the thinking field's description when it creates the form (`withDictationHint`), only when `stt` is
+  set. A server that doesn't answer or a missing program gives an error naming the address or the program. Prefilling
+  the field by closing and reopening the form was considered and dropped: anything typed before would be lost.
 - **The first session offers setup** when the mathesis agent is missing (once per TUI start; "Not now" keeps the old
   notice). The check rides on the cheap `due` call, which also returns the next due date for `/recall` when nothing is
   due.
