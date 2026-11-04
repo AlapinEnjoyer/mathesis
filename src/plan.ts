@@ -220,6 +220,61 @@ export function renderPlanTree(
     .join("\n")
 }
 
+export interface LayerRow {
+  /** 1-based position in the foundations-first order; prerequisites are named by this number. */
+  n: number
+  id: string
+  title: string
+  layer: string
+  /** True where the heading changes (consecutive "Later" layers share one heading). */
+  first: boolean
+  mark: NodeMark
+  needs: number[]
+}
+
+/**
+ * The plan as numbered steps in layers: each row names its prerequisites by number instead of repeating titles, and
+ * layers are headed Start / Then / Later / Goal. The one layout for the chat, tool results and the panel.
+ */
+export function planLayers(plan: Plan, marks: (id: string) => NodeMark = () => "none"): LayerRow[] {
+  const rows = planRows(plan, marks)
+  const number = new Map(rows.map((row, index) => [row.id, index + 1]))
+  const requires = new Map<string, number[]>()
+  for (const { from, to } of plan.edges) requires.set(to, [...(requires.get(to) ?? []), number.get(from)!])
+  const top = Math.max(...rows.map((row) => row.depth))
+  const label = (depth: number) => (depth === 0 ? "Start" : depth === top ? "Goal" : depth === 1 ? "Then" : "Later")
+  return rows.map((row, index) => ({
+    n: index + 1,
+    id: row.id,
+    title: row.title,
+    layer: label(row.depth),
+    first: index === 0 || label(rows[index - 1]!.depth) !== label(row.depth),
+    mark: row.mark,
+    needs: (requires.get(row.id) ?? []).sort((a, b) => a - b),
+  }))
+}
+
+/** `██░░░░░░░ 2/9` */
+export function progressBar(done: number, total: number, width = 9): string {
+  const filled = total > 0 ? Math.round((done / total) * width) : 0
+  return `${"█".repeat(filled)}${"░".repeat(width - filled)} ${done}/${total}`
+}
+
+export const needsText = (needs: number[]) => (needs.length ? `needs ${needs.join(", ")}` : "")
+
+/** The numbered layers as plain text (for a code block in the chat and for tool results). */
+export function renderPlanText(plan: Plan, marks: (id: string) => NodeMark = () => "none"): string {
+  const rows = planLayers(plan, marks)
+  const width = String(rows.length).length
+  const lines: string[] = []
+  for (const row of rows) {
+    if (row.first) lines.push(row.layer)
+    const needs = needsText(row.needs)
+    lines.push(`${String(row.n).padStart(width + 1)} ${MARK_SYMBOL[row.mark]} ${row.title}${needs ? `  (${needs})` : ""}`)
+  }
+  return lines.join("\n")
+}
+
 export function planToMermaid(plan: Plan): string {
   const lines = ["graph TD"]
   for (const node of plan.nodes) lines.push(`  ${node.id}["${node.title.replace(/"/g, "'")}"]`)

@@ -76,7 +76,7 @@ the TUI part into `dist/`), then put the absolute path of the checkout in `plugi
 | `/recall [topic]` | Spaced review of the cards due today, interleaved across topics (at most 20 per session). |
 | `/practice [topic]` | Interleaved practice problems built from the cards you hold, weakest first. |
 | `/mathesis` | Status: cards due per topic (or the next review date), recent lapses, misconceptions, and your calibration: how often you were right at each confidence you gave. |
-| `/mathesis panel`, `/mathesis-panel` | Toggles the side panel: what this session did so far, the plan with its progress ("3 of 7 steps have a card") and the current node, and the cards due today. |
+| `/mathesis panel`, `/mathesis-panel` | Toggles the side panel: what this session did so far, the plan as numbered steps in layers (Start / Then / Later / Goal) with a progress bar and coloured marks, and the cards due today. It opens by itself when a session's plan is first set; close it and it stays closed. |
 
 You don't need the commands every time: switch to the `mathesis` agent and say what you want to learn.
 

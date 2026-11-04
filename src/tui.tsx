@@ -56,6 +56,8 @@ export default Plugin.define({
       clockTimer = undefined
     }
     let playback: Playback | undefined
+    /** Sessions whose panel opened by itself when their plan was first set. */
+    const autoOpened = new Set<string>()
 
     const viewing = (sessionID: string) => {
       const route = context.ui.router.current()
@@ -124,7 +126,16 @@ export default Plugin.define({
     /** Subscriptions to the server's events. They belong to one client, so they are renewed when the server restarts. */
     function subscribe(): Array<() => void> {
       return [
-        rpc().events.on("planUpdated", changed),
+        rpc().events.on("planUpdated", (event) => {
+          changed()
+          // The learner has to see the plan to confirm it: open the panel the first time a session gets one. After the
+          // learner closes it, it stays closed.
+          const { sessionID } = event.data as { sessionID: string }
+          if (!autoOpened.has(sessionID) && viewing(sessionID)) {
+            autoOpened.add(sessionID)
+            context.ui.panel.open(PANEL)
+          }
+        }),
         rpc().events.on("sessionChanged", changed),
         rpc().events.on("questionAsked", (event) => {
           changed()
@@ -379,7 +390,13 @@ export default Plugin.define({
       }),
     )
 
-    type Row = { depth: number; text: string; tone?: "heading" | "muted" | "current" }
+    type Row = {
+      depth: number
+      text: string
+      tone?: "heading" | "muted" | "current"
+      step?: { n: number; mark: "held" | "due" | "current" | "none"; needs: string }
+    }
+    const MARKS = { held: "✓", due: "↻", current: "▶", none: "·" } as const
 
     /** The side panel: phase, the plan as an indented dependency list with the current node, and the due cards. */
     function MathesisPanel(props: { input: PanelInput }) {
@@ -398,6 +415,14 @@ export default Plugin.define({
       )
       const color = (tone?: Row["tone"]) =>
         tone === "current" ? context.theme.text.action.primary.base : tone === "muted" ? context.theme.text.muted : context.theme.text.base
+      const markColor = (mark: "held" | "due" | "current" | "none") =>
+        mark === "held"
+          ? context.theme.text.feedback.success.base
+          : mark === "due"
+            ? context.theme.text.feedback.warning.base
+            : mark === "current"
+              ? context.theme.text.action.primary.base
+              : context.theme.text.muted
       return (
         <box flexDirection="column" paddingLeft={1} paddingRight={1} flexGrow={1}>
           <text fg={context.theme.text.action.primary.base}>
@@ -406,10 +431,31 @@ export default Plugin.define({
           <scrollbox focused={props.input.focused} flexGrow={1}>
             <For each={view().rows}>
               {(row) => (
-                // One text per row inside an indented box, so wrapped lines keep the indentation.
-                <box paddingLeft={row.depth * 2}>
-                  <text fg={color(row.tone)}>{row.tone === "heading" ? <b>{row.text}</b> : row.text || " "}</text>
-                </box>
+                <Show
+                  when={row.step}
+                  fallback={
+                    // One text per row inside an indented box, so wrapped lines keep the indentation.
+                    <box paddingLeft={row.depth * 2}>
+                      <text fg={color(row.tone)}>{row.tone === "heading" ? <b>{row.text}</b> : row.text || " "}</text>
+                    </box>
+                  }
+                >
+                  {/* A plan step: number and mark in a fixed column, so a long title wraps under the title. */}
+                  <box flexDirection="row">
+                    <box width={5} flexShrink={0}>
+                      <text>
+                        <span style={{ fg: context.theme.text.muted }}>{String(row.step!.n).padStart(2)} </span>
+                        <span style={{ fg: markColor(row.step!.mark) }}>{MARKS[row.step!.mark]}</span>
+                      </text>
+                    </box>
+                    <box flexGrow={1} flexShrink={1}>
+                      <text fg={row.step!.mark === "none" ? context.theme.text.muted : color(row.tone)}>
+                        {row.text}
+                        <span style={{ fg: context.theme.text.muted }}>{row.step!.needs ? `  ${row.step!.needs}` : ""}</span>
+                      </text>
+                    </box>
+                  </box>
+                </Show>
               )}
             </For>
           </scrollbox>

@@ -1,4 +1,4 @@
-import { MARK_SYMBOL, planRows, type NodeMark } from "./plan.ts"
+import { needsText, planLayers, progressBar, type NodeMark } from "./plan.ts"
 import { cardCount, dueLabel, topicPlan, type Runtime } from "./runtime.ts"
 import { dueFirst, endOfDay, isDue } from "./srs/fsrs.ts"
 import { getSession } from "./state.ts"
@@ -11,6 +11,8 @@ export interface PanelRow {
   depth: number
   text: string
   tone?: "heading" | "muted" | "current"
+  /** A plan step: its number, state and prerequisites ("needs 2, 3"); `text` is the title. */
+  step?: { n: number; mark: NodeMark; needs: string }
 }
 
 /** The Mathesis side panel for one session: phase, the plan as an indented dependency list, and the cards due today. */
@@ -38,14 +40,10 @@ export async function panel(rt: Runtime, sessionID: string): Promise<{ title: st
       return isDue(idea.srs, now) ? "due" : "held"
     }
     const learned = plan.nodes.filter((node) => byId.get(node.id)?.srs).length
-    rows.push(
-      { depth: 0, text: "" },
-      { depth: 0, text: `Plan: ${learned} of ${plan.nodes.length} steps have a card`, tone: "heading" },
-      { depth: 0, text: "Foundations first:", tone: "muted" },
-    )
-    for (const row of planRows(plan, mark)) {
-      const needs = row.needs.length ? `  ← ${row.needs.join(", ")}` : ""
-      rows.push({ depth: row.depth, text: `${MARK_SYMBOL[row.mark]} ${row.title}${needs}`, ...(row.mark === "current" ? { tone: "current" as const } : {}) })
+    rows.push({ depth: 0, text: "" }, { depth: 0, text: `Plan  ${progressBar(learned, plan.nodes.length)}`, tone: "heading" })
+    for (const row of planLayers(plan, mark)) {
+      if (row.first) rows.push({ depth: 0, text: row.layer, tone: "muted" })
+      rows.push({ depth: 0, text: row.title, step: { n: row.n, mark: row.mark, needs: needsText(row.needs) }, ...(row.mark === "current" ? { tone: "current" as const } : {}) })
     }
     rows.push({ depth: 0, text: "✓ card · ↻ due · ▶ now · · to learn", tone: "muted" })
   } else if (state?.currentNode && byId.has(state.currentNode)) {
