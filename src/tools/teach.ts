@@ -140,7 +140,7 @@ export const teachTools: ToolSpec[] = [
       }
       rt.events.planUpdated({ sessionID: call.sessionID, topic })
       return [
-        `Plan saved (${plan.nodes.length} nodes, ${plan.edges.length} edges). The Mathesis panel shows it to the learner, but in the chat they only see this tool call as raw text, so show the plan yourself, once, in your reply, as a code block, unchanged (what you said above stays as the approach). The numbers are the panel's step numbers:`,
+        `Plan saved (${plan.nodes.length} nodes, ${plan.edges.length} edges). The Mathesis panel opened for the learner and shows the numbered steps and the map, so do not paste or redraw the plan in the chat. Say in a sentence or two what the plan covers (after a rewrite: what moved, by step number), then ask the learner to confirm it. The step numbers:`,
         "",
         "```",
         diagram,

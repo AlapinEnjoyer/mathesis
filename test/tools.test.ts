@@ -592,6 +592,8 @@ describe("panel", () => {
     expect(text(view)).toContain("Plan  █")
     expect(text(view)).toContain("Start\n1 · Sorted `a`\n2 · Extra root\nThen\n3 ▶ Half-open interval (needs 1)\nGoal\n4 · Lower bound (needs 2, 3)")
     expect(view.rows.find((r) => r.step?.mark === "current")?.tone).toBe("current")
+    expect(text(view)).toContain("Map\n")
+    expect(text(view)).toContain("┌")
     expect(text(view)).toContain("No cards due today.")
     clock = new Date("2027-01-01T10:00:00.000Z")
     await rt.store.set(`session/${SESSION}`, { ...(await getSession(rt.store, SESSION))!, currentNode: "bounds" })
