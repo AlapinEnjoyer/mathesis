@@ -13,10 +13,10 @@ edge of what you already understand, and then keeps it in your memory with space
 
 Everything you learn is plain Markdown in a folder (default `~/mathesis`) that you can read and edit in any editor.
 
-> **Disclaimer: this is a heavily AI-assisted port.** Mathesis ports the learning method of
+> **Disclaimer: this is a heavily AI-assisted port (A lot of slop but it works for me).** Mathesis ports the learning method of
 > [LearnHarness](https://github.com/amosblomqvist/learnharness) to opencode and adds spaced repetition. The design and
 > the decisions are the maintainer's, but most of the code, prompts, tests and documents were written by an AI model
-> (Claude, in Claude Code), reviewed by separate AI review agents and checked by hand in the opencode TUI. It is early
+> reviewed by separate AI review agents and checked by hand in the opencode TUI. It is early
 > software: expect rough edges, read `docs/history.md` for what was and was not verified, and please report problems.
 
 ## Requirements
