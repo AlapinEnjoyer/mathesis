@@ -56,8 +56,6 @@ export default Plugin.define({
       clockTimer = undefined
     }
     let playback: Playback | undefined
-    /** Sessions whose panel opened by itself when their plan was first set. */
-    const autoOpened = new Set<string>()
 
     const viewing = (sessionID: string) => {
       const route = context.ui.router.current()
@@ -128,13 +126,10 @@ export default Plugin.define({
       return [
         rpc().events.on("planUpdated", (event) => {
           changed()
-          // The learner has to see the plan to confirm it: open the panel the first time a session gets one. After the
-          // learner closes it, it stays closed.
+          // The learner has to see the plan to confirm it, and in the chat the tool call is only raw text: open the panel
+          // whenever the plan is set or changed in the session they are looking at.
           const { sessionID } = event.data as { sessionID: string }
-          if (!autoOpened.has(sessionID) && viewing(sessionID)) {
-            autoOpened.add(sessionID)
-            context.ui.panel.open(PANEL)
-          }
+          if (viewing(sessionID)) context.ui.panel.open(PANEL)
         }),
         rpc().events.on("sessionChanged", changed),
         rpc().events.on("questionAsked", (event) => {
@@ -647,8 +642,8 @@ export default Plugin.define({
           group: "Mathesis",
           palette: true,
           slash: { name: "mathesis-panel" },
-          // Bind a key with the plugin option `panelKey` (for example "ctrl+x m"), or through the keybind config by id.
-          ...(typeof context.options.panelKey === "string" ? { bind: context.options.panelKey } : {}),
+          // `ctrl+x p` by default; change it with the plugin option `panelKey` (`false` leaves it unbound), or through the keybind config by id.
+          ...(context.options.panelKey === false ? {} : { bind: typeof context.options.panelKey === "string" ? context.options.panelKey : "ctrl+x p" }),
           run: () => togglePanel(),
         },
         {

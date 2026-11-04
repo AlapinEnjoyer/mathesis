@@ -240,3 +240,12 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **Not done:** a side-by-side graph for branching plans (needs a layout algorithm) and rendered mermaid (a terminal
   can't; images through the kitty protocol aren't exposed to plugins). The dictation hint now says that the key starts
   and stops the recording.
+
+## Plan display, second pass (0.6.4)
+
+- **The panel shows the map, not the model.** The model skipped pasting the diagram in a real session, so the box
+  diagram is a "Map" section at the bottom of the panel (code-drawn, same step numbers) and the prompt no longer asks
+  for a paste. The model refers to steps by number and says what moved.
+- **The panel opens on every plan change** in the viewed session (it only opened once before; a learner who closed it
+  and then got a rewrite never saw it). Closing it by hand still works with the key.
+- **`ctrl+x p` is the default panel key** (`ctrl+x m` is opencode's model picker); `panelKey: false` leaves it unbound.

@@ -1,4 +1,4 @@
-import { needsText, planLayers, progressBar, type NodeMark } from "./plan.ts"
+import { needsText, planLayers, progressBar, renderPlanDiagram, type NodeMark } from "./plan.ts"
 import { cardCount, dueLabel, topicPlan, type Runtime } from "./runtime.ts"
 import { dueFirst, endOfDay, isDue } from "./srs/fsrs.ts"
 import { getSession } from "./state.ts"
@@ -46,6 +46,9 @@ export async function panel(rt: Runtime, sessionID: string): Promise<{ title: st
       rows.push({ depth: 0, text: row.title, step: { n: row.n, mark: row.mark, needs: needsText(row.needs) }, ...(row.mark === "current" ? { tone: "current" as const } : {}) })
     }
     rows.push({ depth: 0, text: "✓ card · ↻ due · ▶ now · · to learn", tone: "muted" })
+    // The same boxes the topic note's plan describes, drawn by code so the panel shows the map without the model's help.
+    rows.push({ depth: 0, text: "" }, { depth: 0, text: "Map", tone: "heading" })
+    for (const line of renderPlanDiagram(plan).split("\n")) rows.push({ depth: 0, text: line, tone: "muted" })
   } else if (state?.currentNode && byId.has(state.currentNode)) {
     rows.push({ depth: 0, text: "" }, { depth: 0, text: `Now: ${state.currentNode}`, tone: "current" })
   }
