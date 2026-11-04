@@ -206,7 +206,7 @@ export function withDictationHint<T extends { fields: unknown[] }>(form: T, key:
   const fields = form.fields.map((field) => {
     const f = field as { key?: string; description?: string }
     if (f.key !== "thinking") return field
-    return { ...f, description: `${f.description ?? "Think out loud"} Or press ${key} and say it.` }
+    return { ...f, description: `${f.description ?? "Think out loud"} Or speak: ${key} starts and stops the recording.` }
   })
   return { ...form, fields }
 }

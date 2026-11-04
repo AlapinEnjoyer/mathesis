@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { depths, parsePlan, planLayers, planToMermaid, progressBar, readPlan, renderPlanText, renderPlanTree, storePlan } from "../src/plan.ts"
+import { depths, parsePlan, planLayers, planToMermaid, progressBar, readPlan, renderPlanDiagram, renderPlanTree, storePlan } from "../src/plan.ts"
 
 const ok = (text: string) => {
   const result = parsePlan(text)
@@ -72,9 +72,39 @@ describe("numbered layers", () => {
       [3, "c", "Then", true, [1, 2]],
       [4, "d", "Goal", true, [1, 3]],
     ])
-    expect(renderPlanText(plan, (id) => (id === "a" ? "held" : "none"))).toBe(
-      ["Start", " 1 ✓ A", " 2 · B", "Then", " 3 · C  (needs 1, 2)", "Goal", " 4 · D  (needs 1, 3)"].join("\n"),
+  })
+
+  test("the box diagram joins a box to the next only when the next step needs it", () => {
+    expect(renderPlanDiagram(plan)).toBe(
+      [
+        "┌────────────┐",
+        "│ 1. A       │",
+        "└────────────┘",
+        "",
+        "┌────────────┐",
+        "│ 2. B       │",
+        "└─────┬──────┘",
+        "      ▼",
+        "┌────────────┐",
+        "│ 3. C       │",
+        "│    needs 1 │",
+        "└─────┬──────┘",
+        "      ▼",
+        "┌────────────┐",
+        "│ 4. D       │",
+        "│    needs 1 │",
+        "└────────────┘",
+      ].join("\n"),
     )
+  })
+
+  test("long titles wrap inside the box", () => {
+    const long = ok('graph TD\n a["Choose a table slot with the modulo operation on the hash value of the key"]')
+    const lines = renderPlanDiagram(long, 30).split("\n")
+    expect(lines.length).toBeGreaterThan(3)
+    expect(new Set(lines.map((line) => line.length)).size).toBe(1)
+    expect(lines[1]).toStartWith("│ 1. Choose")
+    expect(lines[2]).toStartWith("│    ")
   })
 
   test("a plan with one layer has only Start; middle layers beyond the first are Later", () => {

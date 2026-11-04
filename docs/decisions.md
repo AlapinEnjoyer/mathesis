@@ -229,9 +229,14 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   keeps the indented tree.
 - **The model pastes the plan once per plan version**, in a code block, from the tool result; after a rewrite only what
   moved. The tool result says so, and the planning prompt (teach phase) does too.
+- **The pasted plan is a box diagram that the code draws** (`renderPlanDiagram`), not one the model sketches: one
+  numbered box per step in foundations-first order, an arrow to the box below only when that step needs the one above,
+  other prerequisites named in the box (`needs 1, 3`). A model-drawn diagram looks the same but could show dependencies
+  the plan does not have; this one can't. The panel keeps the numbered, coloured list (a narrow column).
 - **The panel opens by itself the first time a session gets a plan** (`planUpdated`, once per session and TUI run, only
   when that session is on screen). Closing it keeps it closed; the panel key reopens it.
 - **Panel rows are structured** (`step: { n, mark, needs }`): number and mark in a fixed column, so long titles wrap
   under the title; marks use the theme's success / warning / primary colours; a progress bar sits in the heading.
-- **Not done:** a boxed graph with arrows (needs a layout algorithm and a wide terminal) and rendered mermaid (a
-  terminal can't; images through the kitty protocol aren't exposed to plugins).
+- **Not done:** a side-by-side graph for branching plans (needs a layout algorithm) and rendered mermaid (a terminal
+  can't; images through the kitty protocol aren't exposed to plugins). The dictation hint now says that the key starts
+  and stops the recording.

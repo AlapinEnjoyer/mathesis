@@ -143,7 +143,10 @@ describe("probe → teach → card", () => {
     expect(await call("plan_set", { mermaid: "graph TD\n  Bad_Node" })).toContain("must be a lowercase slug")
     const saved = await call("plan_set", { mermaid: PLAN })
     expect(saved).toContain("Plan saved (3 nodes, 2 edges)")
-    expect(saved).toContain("```\nStart\n 1 · Sorted array\nThen\n 2 · Half-open interval  (needs 1)\nGoal\n 3 · Lower bound  (needs 2)\n```")
+    expect(saved).toContain("```\n┌")
+    expect(saved).toContain("│ 1. Sorted array")
+    expect(saved).toContain("│ 3. Lower bound")
+    expect(saved).toContain("▼")
     expect(await call("quiz", quiz({ nodeId: "nope" }))).toContain("not a node of the plan")
 
     // A passed check creates a card with its first review.

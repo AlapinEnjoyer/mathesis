@@ -262,17 +262,47 @@ export function progressBar(done: number, total: number, width = 9): string {
 
 export const needsText = (needs: number[]) => (needs.length ? `needs ${needs.join(", ")}` : "")
 
-/** The numbered layers as plain text (for a code block in the chat and for tool results). */
-export function renderPlanText(plan: Plan, marks: (id: string) => NodeMark = () => "none"): string {
-  const rows = planLayers(plan, marks)
-  const width = String(rows.length).length
+/** Greedy word wrap; a word longer than the width stays whole. */
+function wrapText(text: string, width: number): string[] {
   const lines: string[] = []
-  for (const row of rows) {
-    if (row.first) lines.push(row.layer)
-    const needs = needsText(row.needs)
-    lines.push(`${String(row.n).padStart(width + 1)} ${MARK_SYMBOL[row.mark]} ${row.title}${needs ? `  (${needs})` : ""}`)
+  let line = ""
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (line && line.length + 1 + word.length > width) {
+      lines.push(line)
+      line = word
+    } else line = line ? `${line} ${word}` : word
   }
-  return lines.join("\n")
+  if (line) lines.push(line)
+  return lines.length ? lines : [""]
+}
+
+/**
+ * The plan as a box diagram for the chat: one box per step in foundations-first order, numbered like the panel. An
+ * arrow joins a box to the one below it only when the lower step needs it; other prerequisites are named inside the
+ * box (`needs 1, 3`), so the picture never shows a dependency the plan does not have.
+ */
+export function renderPlanDiagram(plan: Plan, maxWidth = 44): string {
+  const rows = planLayers(plan)
+  const boxes = rows.map((row) => {
+    const prefix = `${row.n}. `
+    const lines = wrapText(row.title, maxWidth - prefix.length).map((line, index) => (index === 0 ? prefix : " ".repeat(prefix.length)) + line)
+    const extra = row.needs.filter((n) => n !== row.n - 1)
+    if (extra.length) lines.push(`${" ".repeat(prefix.length)}needs ${extra.join(", ")}`)
+    return { lines, linked: row.needs.includes(row.n - 1) }
+  })
+  const inner = Math.max(...boxes.flatMap((box) => box.lines.map((line) => line.length)))
+  const mid = Math.floor((inner + 2) / 2)
+  const out: string[] = []
+  boxes.forEach((box, index) => {
+    const next = boxes[index + 1]
+    out.push(`┌${"─".repeat(inner + 2)}┐`)
+    for (const line of box.lines) out.push(`│ ${line.padEnd(inner)} │`)
+    const bottom = `└${"─".repeat(inner + 2)}┘`.split("")
+    if (next?.linked) bottom[mid] = "┬"
+    out.push(bottom.join(""))
+    if (next) out.push(next.linked ? `${" ".repeat(mid)}▼` : "")
+  })
+  return out.join("\n")
 }
 
 export function planToMermaid(plan: Plan): string {
