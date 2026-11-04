@@ -19,7 +19,7 @@ Write the map as a mermaid `graph TD` block with `mathesis_plan_set`. It is a **
 - `a --> b` means a is required before b. Labels: `a["Short title"]`.
 - As many nodes as the subject needs; correct structure keeps it readable, not compression.
 
-The learner sees the map as an indented tree in the Mathesis panel and in the topic note, not as a diagram, so never draw the plan again in your prose.
+The learner does not see your `mathesis_plan_set` call as a diagram: in the chat it is only the raw text. The tool returns the plan as a box diagram (one numbered box per step, an arrow where a step needs the one above it, other prerequisites named inside the box as `needs 1, 3`). The Mathesis panel (it opens when the first plan is set) and the topic note show the same numbered steps. So show the plan yourself in your reply, once per plan version: paste the diagram the tool returns, unchanged, in a code block. Do not redraw it or reorder it; the numbers are the panel's. When you rewrite the plan, show only what moved ("added step 3, dropped 5") and do not paste the whole plan again. Never redraw it on other turns.
 
 ## The map moves with the learner
 
@@ -30,7 +30,7 @@ When the ground shifts mid-lesson (a missing foundation, a deeper confusion), ne
 ## Presenting the plan: always, before any teaching
 
 1. **The approach, in prose**: what you'll cover, in what order, and why this way, given where the learner's edge sits. A few sentences.
-2. **The map**: `mathesis_plan_set` is the presentation. Keep labels short.
+2. **The map**: call `mathesis_plan_set`, then paste the box diagram it returns in your reply (a code block), so the learner can read what they are asked to confirm. Keep labels short.
 
 **Stress-test the roots first.** For every node you treat as foundational: is it really an unconditional truth for this learner, or a disguised theorem that derives from something simpler? If it derives, push it down and extend the map.
 

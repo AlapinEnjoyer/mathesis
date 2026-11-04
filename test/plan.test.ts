@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { depths, parsePlan, planToMermaid, readPlan, renderPlanTree, storePlan } from "../src/plan.ts"
+import { depths, parsePlan, planLayers, planToMermaid, progressBar, readPlan, renderPlanDiagram, renderPlanTree, storePlan } from "../src/plan.ts"
 
 const ok = (text: string) => {
   const result = parsePlan(text)
@@ -58,5 +58,66 @@ describe("rendering and storage", () => {
     expect(ok(planToMermaid(plan))).toEqual(plan)
     expect(readPlan({ nodes: [{ id: "x" }, { id: "Bad" }], edges: [["x", "missing"]] })).toEqual({ nodes: [{ id: "x", title: "x" }], edges: [] })
     expect(readPlan("nope")).toBeUndefined()
+  })
+})
+
+describe("numbered layers", () => {
+  const plan = ok('graph TD\n a["A"] --> c["C"]\n b["B"] --> c\n c --> d["D"]\n a --> d')
+
+  test("steps are numbered foundations first, layered, and name prerequisites by number", () => {
+    const rows = planLayers(plan, (id) => (id === "a" ? "held" : id === "c" ? "current" : "none"))
+    expect(rows.map((r) => [r.n, r.id, r.layer, r.first, r.needs])).toEqual([
+      [1, "a", "Start", true, []],
+      [2, "b", "Start", false, []],
+      [3, "c", "Then", true, [1, 2]],
+      [4, "d", "Goal", true, [1, 3]],
+    ])
+  })
+
+  test("the box diagram joins a box to the next only when the next step needs it", () => {
+    expect(renderPlanDiagram(plan)).toBe(
+      [
+        "┌────────────┐",
+        "│ 1. A       │",
+        "└────────────┘",
+        "",
+        "┌────────────┐",
+        "│ 2. B       │",
+        "└─────┬──────┘",
+        "      ▼",
+        "┌────────────┐",
+        "│ 3. C       │",
+        "│    needs 1 │",
+        "└─────┬──────┘",
+        "      ▼",
+        "┌────────────┐",
+        "│ 4. D       │",
+        "│    needs 1 │",
+        "└────────────┘",
+      ].join("\n"),
+    )
+  })
+
+  test("long titles wrap inside the box", () => {
+    const long = ok('graph TD\n a["Choose a table slot with the modulo operation on the hash value of the key"]')
+    const lines = renderPlanDiagram(long, 30).split("\n")
+    expect(lines.length).toBeGreaterThan(3)
+    expect(new Set(lines.map((line) => line.length)).size).toBe(1)
+    expect(lines[1]).toStartWith("│ 1. Choose")
+    expect(lines[2]).toStartWith("│    ")
+  })
+
+  test("a plan with one layer has only Start; middle layers beyond the first are Later", () => {
+    expect(planLayers(ok('graph TD\n a["A"]\n b["B"]')).map((r) => r.layer)).toEqual(["Start", "Start"])
+    const deep = ok('graph TD\n a["A"] --> b["B"]\n b --> c["C"]\n c --> d["D"]')
+    expect(planLayers(deep).map((r) => r.layer)).toEqual(["Start", "Then", "Later", "Goal"])
+    const long = ok('graph TD\n a["A"] --> b["B"]\n b --> c["C"]\n c --> d["D"]\n d --> e["E"]\n e --> f["F"]')
+    expect(planLayers(long).map((r) => (r.first ? r.layer : "-"))).toEqual(["Start", "Then", "Later", "-", "-", "Goal"])
+  })
+
+  test("progress bar", () => {
+    expect(progressBar(2, 9)).toBe("██░░░░░░░ 2/9")
+    expect(progressBar(0, 0)).toBe("░░░░░░░░░ 0/0")
+    expect(progressBar(9, 9)).toBe("█████████ 9/9")
   })
 })

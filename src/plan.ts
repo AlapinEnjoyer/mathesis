@@ -220,6 +220,91 @@ export function renderPlanTree(
     .join("\n")
 }
 
+export interface LayerRow {
+  /** 1-based position in the foundations-first order; prerequisites are named by this number. */
+  n: number
+  id: string
+  title: string
+  layer: string
+  /** True where the heading changes (consecutive "Later" layers share one heading). */
+  first: boolean
+  mark: NodeMark
+  needs: number[]
+}
+
+/**
+ * The plan as numbered steps in layers: each row names its prerequisites by number instead of repeating titles, and
+ * layers are headed Start / Then / Later / Goal. The one layout for the chat, tool results and the panel.
+ */
+export function planLayers(plan: Plan, marks: (id: string) => NodeMark = () => "none"): LayerRow[] {
+  const rows = planRows(plan, marks)
+  const number = new Map(rows.map((row, index) => [row.id, index + 1]))
+  const requires = new Map<string, number[]>()
+  for (const { from, to } of plan.edges) requires.set(to, [...(requires.get(to) ?? []), number.get(from)!])
+  const top = Math.max(...rows.map((row) => row.depth))
+  const label = (depth: number) => (depth === 0 ? "Start" : depth === top ? "Goal" : depth === 1 ? "Then" : "Later")
+  return rows.map((row, index) => ({
+    n: index + 1,
+    id: row.id,
+    title: row.title,
+    layer: label(row.depth),
+    first: index === 0 || label(rows[index - 1]!.depth) !== label(row.depth),
+    mark: row.mark,
+    needs: (requires.get(row.id) ?? []).sort((a, b) => a - b),
+  }))
+}
+
+/** `██░░░░░░░ 2/9` */
+export function progressBar(done: number, total: number, width = 9): string {
+  const filled = total > 0 ? Math.round((done / total) * width) : 0
+  return `${"█".repeat(filled)}${"░".repeat(width - filled)} ${done}/${total}`
+}
+
+export const needsText = (needs: number[]) => (needs.length ? `needs ${needs.join(", ")}` : "")
+
+/** Greedy word wrap; a word longer than the width stays whole. */
+function wrapText(text: string, width: number): string[] {
+  const lines: string[] = []
+  let line = ""
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    if (line && line.length + 1 + word.length > width) {
+      lines.push(line)
+      line = word
+    } else line = line ? `${line} ${word}` : word
+  }
+  if (line) lines.push(line)
+  return lines.length ? lines : [""]
+}
+
+/**
+ * The plan as a box diagram for the chat: one box per step in foundations-first order, numbered like the panel. An
+ * arrow joins a box to the one below it only when the lower step needs it; other prerequisites are named inside the
+ * box (`needs 1, 3`), so the picture never shows a dependency the plan does not have.
+ */
+export function renderPlanDiagram(plan: Plan, maxWidth = 44): string {
+  const rows = planLayers(plan)
+  const boxes = rows.map((row) => {
+    const prefix = `${row.n}. `
+    const lines = wrapText(row.title, maxWidth - prefix.length).map((line, index) => (index === 0 ? prefix : " ".repeat(prefix.length)) + line)
+    const extra = row.needs.filter((n) => n !== row.n - 1)
+    if (extra.length) lines.push(`${" ".repeat(prefix.length)}needs ${extra.join(", ")}`)
+    return { lines, linked: row.needs.includes(row.n - 1) }
+  })
+  const inner = Math.max(...boxes.flatMap((box) => box.lines.map((line) => line.length)))
+  const mid = Math.floor((inner + 2) / 2)
+  const out: string[] = []
+  boxes.forEach((box, index) => {
+    const next = boxes[index + 1]
+    out.push(`┌${"─".repeat(inner + 2)}┐`)
+    for (const line of box.lines) out.push(`│ ${line.padEnd(inner)} │`)
+    const bottom = `└${"─".repeat(inner + 2)}┘`.split("")
+    if (next?.linked) bottom[mid] = "┬"
+    out.push(bottom.join(""))
+    if (next) out.push(next.linked ? `${" ".repeat(mid)}▼` : "")
+  })
+  return out.join("\n")
+}
+
 export function planToMermaid(plan: Plan): string {
   const lines = ["graph TD"]
   for (const node of plan.nodes) lines.push(`  ${node.id}["${node.title.replace(/"/g, "'")}"]`)

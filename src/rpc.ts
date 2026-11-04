@@ -111,7 +111,15 @@ export const Mathesis = Rpc.define({
       output: obj(
         {
           title: str,
-          rows: { type: "array", items: obj({ depth: { type: "number" }, text: str, tone: str }, ["depth", "text"]) },
+          rows: { type: "array", items: obj(
+              {
+                depth: { type: "number" },
+                text: str,
+                tone: str,
+                step: obj({ n: { type: "number" }, mark: str, needs: str }, ["n", "mark", "needs"]),
+              },
+              ["depth", "text"],
+            ) },
         },
         ["title", "rows"],
       ),

@@ -141,7 +141,12 @@ describe("probe → teach → card", () => {
     // Teaching needs a plan and plan nodes.
     expect(await call("quiz", quiz())).toContain("no plan yet")
     expect(await call("plan_set", { mermaid: "graph TD\n  Bad_Node" })).toContain("must be a lowercase slug")
-    expect(await call("plan_set", { mermaid: PLAN })).toContain("Plan saved (3 nodes, 2 edges)")
+    const saved = await call("plan_set", { mermaid: PLAN })
+    expect(saved).toContain("Plan saved (3 nodes, 2 edges)")
+    expect(saved).toContain("```\n┌")
+    expect(saved).toContain("│ 1. Sorted array")
+    expect(saved).toContain("│ 3. Lower bound")
+    expect(saved).toContain("▼")
     expect(await call("quiz", quiz({ nodeId: "nope" }))).toContain("not a node of the plan")
 
     // A passed check creates a card with its first review.
@@ -570,7 +575,11 @@ describe("practice", () => {
 })
 
 describe("panel", () => {
-  const text = (view: Awaited<ReturnType<typeof panel>>) => view.rows.map((r) => `${"  ".repeat(r.depth)}${r.text}`).join("\n")
+  const MARKS = { held: "✓", due: "↻", current: "▶", none: "·" }
+  const text = (view: Awaited<ReturnType<typeof panel>>) =>
+    view.rows
+      .map((r) => `${"  ".repeat(r.depth)}${r.step ? `${r.step.n} ${MARKS[r.step.mark as keyof typeof MARKS]} ${r.text}${r.step.needs ? ` (${r.step.needs})` : ""}` : r.text}`)
+      .join("\n")
 
   test("shows the phase, the plan with titles and marks, and the cards due now", async () => {
     await toTeach()
@@ -580,13 +589,15 @@ describe("panel", () => {
     const view = await panel(rt, SESSION)
     expect(view.title).toBe("Mathesis: how binary search finds its bounds")
     expect(text(view)).toContain("Phase: teach")
-    expect(text(view)).toContain("· Sorted `a`\n· Extra root\n  ▶ Half-open interval  ← Sorted `a`\n    · Lower bound  ← Half-open interval, Extra root")
-    expect(view.rows.find((r) => r.text.startsWith("▶"))?.tone).toBe("current")
+    expect(text(view)).toContain("Plan  █")
+    expect(text(view)).toContain("Start\n1 · Sorted `a`\n2 · Extra root\nThen\n3 ▶ Half-open interval (needs 1)\nGoal\n4 · Lower bound (needs 2, 3)")
+    expect(view.rows.find((r) => r.step?.mark === "current")?.tone).toBe("current")
     expect(text(view)).toContain("No cards due today.")
     clock = new Date("2027-01-01T10:00:00.000Z")
     await rt.store.set(`session/${SESSION}`, { ...(await getSession(rt.store, SESSION))!, currentNode: "bounds" })
     const later = text(await panel(rt, SESSION))
     expect(later).toContain("↻ Half-open interval")
+    expect(later).toContain("▶ Lower bound")
     expect(later).toContain("Due today: 1 card\n  ↻ interval (overdue by")
     expect(text(await panel(rt, "unknown"))).toContain("Not a Mathesis session")
   })

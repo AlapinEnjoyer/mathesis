@@ -121,7 +121,7 @@ describe("status line helpers", () => {
     const form = buildForm({ questionID: "q1", kind: "explain", stem: "Why?" } as never)
     const hinted = withDictationHint(form, "ctrl+x v")
     const thinking = hinted.fields.find((f) => (f as { key: string }).key === "thinking") as { description: string }
-    expect(thinking.description).toEndWith("Or press ctrl+x v and say it.")
+    expect(thinking.description).toEndWith("Or speak: ctrl+x v starts and stops the recording.")
     expect(hinted.fields[0]).toBe(form.fields[0])
     expect(withDictationHint(form, undefined)).toBe(form)
   })

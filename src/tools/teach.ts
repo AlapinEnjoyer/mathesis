@@ -1,5 +1,5 @@
 import type { Phase } from "../phases.ts"
-import { parsePlan, planToMermaid, readPlan, renderPlanTree, storePlan, type Plan } from "../plan.ts"
+import { parsePlan, planToMermaid, readPlan, renderPlanDiagram, renderPlanTree, storePlan, type Plan } from "../plan.ts"
 import { Refusal, dueLabel, sessionKind, type Runtime } from "../runtime.ts"
 import { rate, review, type Grade } from "../srs/fsrs.ts"
 import { mutateSession, setPhase, updateSession, type AnswerRecord, type SessionState } from "../state.ts"
@@ -126,7 +126,7 @@ export const teachTools: ToolSpec[] = [
       const parsed = parsePlan(text(input, "mermaid", { max: 20_000 })!)
       if (!parsed.ok) throw new Refusal(`the plan could not be read:\n${parsed.problems.map((p) => `- ${p}`).join("\n")}`)
       const plan = parsed.plan
-      const tree = renderPlanTree(plan)
+      const diagram = renderPlanDiagram(plan)
       await rt.vault.updateTopic(
         topic,
         {
@@ -139,7 +139,13 @@ export const teachTools: ToolSpec[] = [
         await updateSession(rt.store, call.sessionID, { currentNode: undefined }, rt.now())
       }
       rt.events.planUpdated({ sessionID: call.sessionID, topic })
-      return `Plan saved (${plan.nodes.length} nodes, ${plan.edges.length} edges). The learner sees it as:\n\n${tree}`
+      return [
+        `Plan saved (${plan.nodes.length} nodes, ${plan.edges.length} edges). The Mathesis panel shows it to the learner, but in the chat they only see this tool call as raw text, so show the plan yourself, once, in your reply, as a code block, unchanged (what you said above stays as the approach). The numbers are the panel's step numbers:`,
+        "",
+        "```",
+        diagram,
+        "```",
+      ].join("\n")
     },
   },
   {
