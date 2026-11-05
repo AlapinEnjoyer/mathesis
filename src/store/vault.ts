@@ -18,6 +18,12 @@ import {
 export const SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 export const ASKED_BEFORE_LIMIT = 10
 
+/** A learner's goal for a title: its first line, cut to `max` characters. The full text stays in the topic note. */
+export function shortGoal(text: string, max = 60): string {
+  const line = text.trim().split(/\r?\n/, 1)[0]!.replace(/\s+/g, " ").trim()
+  return line.length <= max ? line : `${line.slice(0, max - 1).trimEnd()}…`
+}
+
 export function slugify(text: string, max = 60): string {
   const slug = text
     // A file the learner pointed at ("@notes/Homepage overview.md") names the topic without its extension.
