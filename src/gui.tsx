@@ -11,6 +11,7 @@ const TAB = "main"
 const QUESTION_TAB = "question"
 const SAMPLE_RATE = 16_000
 const DUE_REFRESH_MS = 10 * 60 * 1000
+const TAB_GRACE_MS = 1500
 /** Each state's look, from the app's own theme, so light and dark both work. */
 const STATES: Record<string, { label: string; fill: string; stroke: string; text: string }> = {
   held: { label: "Learned", fill: "var(--v2-state-bg-success)", stroke: "var(--v2-state-border-success)", text: "var(--v2-state-fg-success)" },
@@ -67,6 +68,7 @@ export default Plugin.define({
     /** Half-written answers, so leaving the tab loses nothing. */
     const drafts = new Map<string, Record<string, string>>()
     const broughtForward = new Set<string>()
+    const startedHere = new Set<string>()
     /** The notice of a question in another session, gone once that question is seen or closed. */
     const waiting = new Map<string, { dismiss(): void }>()
     /** The question on screen, for the keyboard commands. */
@@ -349,6 +351,12 @@ export default Plugin.define({
       }
     }
 
+    /**
+     * The TUI and this app can share one server, and the first claim gets a question. Only sessions open here are claimed,
+     * so a question from a terminal session is never taken away from the terminal.
+     */
+    const isOpenHere = (sessionID: string) => startedHere.has(sessionID) || ctx.sessions.list().some((session) => session.id === sessionID)
+
     async function claimAndShow(questionID: string, location?: Location) {
       const claim = (await rpc().claim({ questionID }, at(location))) as { accepted: boolean; sessionID?: string; form?: FormSpec }
       if (!claim.accepted || !claim.form || !claim.sessionID) return
@@ -390,6 +398,7 @@ export default Plugin.define({
           { ...input, ...(session ? { directory: session.directory } : {}), math: true },
           at(session?.location),
         )) as { sessionID: string; notice?: string }
+        startedHere.add(result.sessionID)
         const server = session?.server.id ?? ctx.servers.list()[0]
         if (server) ctx.tabs.open({ server, id: result.sessionID }, { focus: true })
         if (result.notice) ctx.toast.show({ title: "Mathesis", description: result.notice })
@@ -511,9 +520,13 @@ export default Plugin.define({
       }),
       events.on("questionAsked", (event) => {
         const location = (event as { location?: Location }).location
-        void claimAndShow((event.data as { questionID: string }).questionID, location).catch((error) =>
-          ctx.toast.show({ title: "Mathesis", description: errorText(error) }),
-        )
+        const { questionID, sessionID } = event.data as { questionID: string; sessionID: string }
+        const claim = () => void claimAndShow(questionID, location).catch(failed)
+        if (isOpenHere(sessionID)) return claim()
+        // A session started here may ask before its tab exists; any other one belongs to the client that shows it.
+        setTimeout(() => {
+          if (isOpenHere(sessionID)) claim()
+        }, TAB_GRACE_MS)
       }),
       events.on("questionClosed", (event) => {
         closeQuestion((event.data as { formID: string }).formID)
@@ -527,8 +540,8 @@ export default Plugin.define({
       if (session) bringForward(session, questions()[session.id]?.form.id)
       const location = session?.location
       if (!location) return
-      void (rpc().pending({}, at(location)) as Promise<{ questions: { questionID: string; claimed: boolean }[] }>).then(({ questions }) => {
-        for (const question of questions) if (!question.claimed) void claimAndShow(question.questionID, location)
+      void (rpc().pending({}, at(location)) as Promise<{ questions: { questionID: string; sessionID: string; claimed: boolean }[] }>).then(({ questions }) => {
+        for (const question of questions) if (!question.claimed && isOpenHere(question.sessionID)) void claimAndShow(question.questionID, location)
       })
     })
   },

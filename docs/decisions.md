@@ -259,3 +259,22 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **Legend and map spacing (0.6.7).** The legend names only the marks the plan shows, is left out while every step is
   still to learn, and is separated by spaces (`·` is also the "to learn" mark, which gave `now · · to learn`). Boxes
   that are not joined by an arrow now touch, with no blank line, so the map takes less height.
+
+## Desktop GUI (0.7.0)
+
+- **A third part, not a port.** `src/gui.tsx` builds to `dist/gui-experimental.cjs`. The server part and the TUI code stay
+  as they were; the GUI talks to the same RPC contract. No Electron main process: Node work is in the server part, and
+  plugin GUIs do not load in the `opencode serve` browser UI anyway (checked on 2.2.1, the app loads them through a
+  desktop bridge).
+- **Questions are a side-panel tab, not a dialog.** A dialog hid the chat, overflowed the window with the confidence
+  options, cancelled on close, and blocks host keybinds. The tab keeps drafts and has an explicit Skip. No native form is
+  created: `claim`, `shown` and `relay` work unchanged.
+- **Only claim sessions open here.** Desktop and the TUI share one background service and the first claim wins, so a
+  Desktop that claimed everything would take questions away from the terminal.
+- **The plan is drawn by us** (`src/plan-layout.ts`), not mermaid: state colours, one view instead of a list plus graph.
+  A line that skips a row goes through a gap, not behind a card. Colours are the app's `--v2-*` theme tokens.
+- **LaTeX is opt-in through the first message** (`start` with `math: true`). The system prompt stays the same for every
+  client, so the prompt cache holds, and the terminal keeps its Unicode rule.
+- **Dictation sends a WAV through the `transcribe` RPC**, 16 kHz from Web Audio: no browser codec, no CORS with
+  whisper-server. It reads `voice.stt` from the server options.
+- **Keys:** Desktop has no leader, so `mod+alt+v`, `mod+alt+z`, `mod+shift+m` (`mod+shift+v` is paste as plain text).
