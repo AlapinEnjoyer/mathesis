@@ -14,10 +14,12 @@ export interface PanelRow {
   tone?: "heading" | "muted" | "current"
   /** A plan step: its number, state and prerequisites ("needs 2, 3"); `text` is the title. */
   step?: { n: number; mark: NodeMark; needs: string }
+  /** Text that only stands in for a drawn plan; a client that draws the steps itself skips these rows. */
+  plan?: boolean
 }
 
 /** The Mathesis side panel for one session: phase, the plan as an indented dependency list, and the cards due today. */
-export async function panel(rt: Runtime, sessionID: string): Promise<{ title: string; rows: PanelRow[] }> {
+export async function panel(rt: Runtime, sessionID: string): Promise<{ title: string; rows: PanelRow[]; progress?: { learned: number; total: number } }> {
   const now = rt.now()
   const state = await getSession(rt.store, sessionID)
   const [{ ideas }, { entries }] = await Promise.all([rt.vault.listIdeas(), readLog(rt.vault.logPath)])
@@ -41,17 +43,17 @@ export async function panel(rt: Runtime, sessionID: string): Promise<{ title: st
       return isDue(idea.srs, now) ? "due" : "held"
     }
     const learned = plan.nodes.filter((node) => byId.get(node.id)?.srs).length
-    rows.push({ depth: 0, text: "" }, { depth: 0, text: `Plan  ${progressBar(learned, plan.nodes.length)}`, tone: "heading" })
+    rows.push({ depth: 0, text: "" }, { depth: 0, text: `Plan  ${progressBar(learned, plan.nodes.length)}`, tone: "heading", plan: true })
     const layers = planLayers(plan, mark)
     for (const row of layers) {
-      if (row.first) rows.push({ depth: 0, text: row.layer, tone: "muted" })
+      if (row.first) rows.push({ depth: 0, text: row.layer, tone: "muted", plan: true })
       rows.push({ depth: 0, text: row.title, step: { n: row.n, mark: row.mark, needs: needsText(row.needs) }, ...(row.mark === "current" ? { tone: "current" as const } : {}) })
     }
     const legend = planLegend(layers.map((row) => row.mark))
-    if (legend) rows.push({ depth: 0, text: legend, tone: "muted" })
+    if (legend) rows.push({ depth: 0, text: legend, tone: "muted", plan: true })
     // The same boxes the topic note's plan describes, drawn by code so the panel shows the map without the model's help.
-    rows.push({ depth: 0, text: "" }, { depth: 0, text: "Map", tone: "heading" })
-    for (const line of renderPlanDiagram(plan).split("\n")) rows.push({ depth: 0, text: line, tone: "muted" })
+    rows.push({ depth: 0, text: "", plan: true }, { depth: 0, text: "Map", tone: "heading", plan: true })
+    for (const line of renderPlanDiagram(plan).split("\n")) rows.push({ depth: 0, text: line, tone: "muted", plan: true })
   } else if (state?.currentNode && byId.has(state.currentNode)) {
     rows.push({ depth: 0, text: "" }, { depth: 0, text: `Now: ${state.currentNode}`, tone: "current" })
   }
@@ -59,7 +61,7 @@ export async function panel(rt: Runtime, sessionID: string): Promise<{ title: st
   rows.push({ depth: 0, text: "" }, { depth: 0, text: due.length ? `Due today: ${cardCount(due.length)}` : "No cards due today.", tone: "heading" })
   for (const idea of due.slice(0, DUE_SHOWN)) rows.push({ depth: 1, text: `↻ ${idea.id} (${dueLabel(idea, now)})` })
   if (due.length > DUE_SHOWN) rows.push({ depth: 1, text: `… and ${due.length - DUE_SHOWN} more`, tone: "muted" })
-  return { title, rows }
+  return { title, rows, ...(plan ? { progress: { learned: plan.nodes.filter((node) => byId.get(node.id)?.srs).length, total: plan.nodes.length } } : {}) }
 }
 
 /** What this session did, from its log entries: cards from passed checks, reviews, practice problems, misconceptions. */

@@ -275,7 +275,7 @@ export const questionTools: ToolSpec[] = [
       "Ask the learner ONE multiple-choice question and wait for the answer. The learner answers in a form with their choice (or \"I don't know\"), a confidence and optional thinking. Commit the answer key before asking: reason out the explanation first, then the correct index. The result gives the verdict, the confidence and the thinking.",
     input: schema.object(
       {
-        question: schema.str("The question text (Markdown; no LaTeX)."),
+        question: schema.str("The question text (Markdown; no LaTeX unless the learner said their app renders it)."),
         options: { type: "array", items: { type: "string" }, minItems: 2, maxItems: 6, description: "2–6 bare options, no reasoning in them." },
         answerKey: schema.object(
           {
@@ -327,7 +327,7 @@ export const questionTools: ToolSpec[] = [
       "Ask the learner ONE free-recall question and wait for the answer. The learner writes the answer (or leaves it empty for \"I don't know\"), with a confidence and optional thinking. Commit the answer key first: your worked answer with its reasoning. The result gives the learner's words next to your committed answer; grade strictly.",
     input: schema.object(
       {
-        question: schema.str("The question text (Markdown; no LaTeX)."),
+        question: schema.str("The question text (Markdown; no LaTeX unless the learner said their app renders it)."),
         answerKey: schema.object({ correctAnswer: schema.str("Your committed answer with its reasoning, written BEFORE asking."), ...answerKeyType }, ["correctAnswer"]),
         ...common,
       },
