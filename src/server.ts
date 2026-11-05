@@ -1,3 +1,6 @@
+import { rm, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { Plugin } from "@opencode/plugin"
 import { QuestionBroker } from "./broker.ts"
 import { promptCache } from "./compose.ts"
@@ -17,6 +20,7 @@ import { reviewTools } from "./tools/review.ts"
 import { teachTools } from "./tools/teach.ts"
 import { topicTools } from "./tools/topics.ts"
 import { topicIdeas } from "./runtime.ts"
+import { parseVoice, transcribe } from "./voice.ts"
 
 type Emit = <N extends "questionAsked" | "questionClosed" | "planUpdated" | "cardsChanged" | "sessionChanged">(name: N, data: Record<string, unknown>) => void
 
@@ -104,6 +108,17 @@ export default Plugin.define({
         return { due, setupNeeded, ...(next ? { next: today(next) } : {}) }
       },
       panel: async (input) => panel(rt, (input as { sessionID: string }).sessionID),
+      transcribe: async (input) => {
+        const { stt } = parseVoice(ctx.options.voice)
+        if (!stt) throw new Error('Dictation needs `voice.stt` in the plugin options in opencode.jsonc.')
+        const file = join(tmpdir(), `mathesis-${crypto.randomUUID()}.wav`)
+        await writeFile(file, Buffer.from((input as { audio: string }).audio, "base64"))
+        try {
+          return { text: await transcribe(stt, file) }
+        } finally {
+          await rm(file, { force: true })
+        }
+      },
       setup: async (input) => setup(rt, (input ?? {}) as SetupInput),
     })
     emit = (name, data) => void registration.events.emit(name as never, data as never).catch(() => {})

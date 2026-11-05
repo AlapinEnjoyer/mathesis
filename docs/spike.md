@@ -157,3 +157,19 @@ opencode 2.2.1, `--standalone` in tmux, test vault and config folder, stub STT (
 - **End to end:** record → stub transcript → toast "Spoken thinking added: …" → submit → the session note has
   `**Thinking:** Spoken: …`. `ctrl+x o` wrote the question audio with `say`. The reload message from to-do 1 worked
   too: after a plugin reload the agent said "form still works" and asked the same question again.
+
+## Desktop GUI test setup (2026-11-05, Desktop 2.2.5)
+
+The packaged app does not run a private server: it attaches to the shared background service, so by default a test
+reaches the real config and vault. `--user-data-dir` is ignored. To isolate it, start the app binary with
+`HOME=<root> ZDOTDIR=<root> OPENCODE_DESKTOP_TEST_ROOT=<root> MATHESIS_VAULT=<vault>
+OPENCODE_CONFIG_DIR=<root>/config/opencode --remote-debugging-port=9333`, and put `{"port":49399}` in
+`<root>/config/opencode/service.json`: the managed port is fixed at 49374, and with the real service on it the test
+service exits. Without `HOME` the login shell's environment brought back the real state folder and the window attached
+to the real service, so check the window's connections before touching it. `OPENCODE_DESKTOP_SERVER_CHANNEL=local`
+does not work with a packaged app: app and service look at different files.
+
+Playwright's `connectOverCDP` hangs on the Electron target; the raw DevTools protocol works (`/json/list`, one
+WebSocket). A fake microphone is a stub of `getUserMedia` that plays a file into a `MediaStreamDestination`. No provider
+is logged in under the test root, so a small local OpenAI-compatible mock calls the real tools. Keys under Option must be
+sent as macOS produces them (`√` with code `KeyV`). Host keybinds do not fire while a dialog is open.

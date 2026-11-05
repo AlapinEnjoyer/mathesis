@@ -76,6 +76,8 @@ export const Mathesis = Rpc.define({
           topic: str,
           model: modelRef,
           directory: str,
+          /** The client renders LaTeX, so the model may write math that way. */
+          math: bool,
         },
         ["kind"],
       ),
@@ -111,11 +113,13 @@ export const Mathesis = Rpc.define({
       output: obj(
         {
           title: str,
+          progress: obj({ learned: { type: "number" }, total: { type: "number" } }, ["learned", "total"]),
           rows: { type: "array", items: obj(
               {
                 depth: { type: "number" },
                 text: str,
                 tone: str,
+                plan: bool,
                 step: obj({ n: { type: "number" }, mark: str, needs: str }, ["n", "mark", "needs"]),
               },
               ["depth", "text"],
@@ -123,6 +127,11 @@ export const Mathesis = Rpc.define({
         },
         ["title", "rows"],
       ),
+    },
+    /** Turns recorded speech (a base64 WAV) into text with the `voice.stt` plugin option; for clients without a shell. */
+    transcribe: {
+      input: obj({ audio: str }, ["audio"]),
+      output: obj({ text: str }, ["text"]),
     },
     /** The number of due cards (cheap; for the footer), the next due date when none is due, and whether setup is needed. */
     due: {
@@ -170,6 +179,7 @@ export type StartInput = {
   topic?: string
   model?: ModelRefInput
   directory?: string
+  math?: boolean
 }
 export type SetupInput = {
   models?: { teach?: ModelRefInput; recall?: ModelRefInput; background?: ModelRefInput }

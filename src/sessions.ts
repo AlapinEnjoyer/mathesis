@@ -155,7 +155,9 @@ export async function startSession(ctx: Ctx, rt: Runtime, input: StartInput): Pr
         ? `Start my spaced review${topicId ? ` for the topic \`${topicId}\`` : ""}.`
         : `Start a practice session${topicId ? ` on the topic \`${topicId}\`` : ""}.`
   }
-  await ctx.session.prompt({ sessionID: session.id, text: opening })
+  // In the first message, not the system prompt: the prompt stays the same for every client, so the cache holds.
+  const client = input.math ? " (I'm in the desktop app: it renders LaTeX, so write math as $...$ and $$...$$.)" : ""
+  await ctx.session.prompt({ sessionID: session.id, text: opening + client })
   return { sessionID: session.id, title, ...(notices.length ? { notice: notices.join(" ") } : {}) }
 }
 
