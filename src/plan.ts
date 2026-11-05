@@ -300,9 +300,25 @@ export function renderPlanDiagram(plan: Plan, maxWidth = 44): string {
     const bottom = `└${"─".repeat(inner + 2)}┘`.split("")
     if (next?.linked) bottom[mid] = "┬"
     out.push(bottom.join(""))
-    if (next) out.push(next.linked ? `${" ".repeat(mid)}▼` : "")
+    if (next?.linked) out.push(`${" ".repeat(mid)}▼`)
   })
   return out.join("\n")
+}
+
+/** Explains the marks a plan shows. Empty when every step is still to learn: the plain list needs no key then. */
+export function planLegend(marks: Iterable<NodeMark>): string {
+  const used = new Set(marks)
+  if (![...used].some((mark) => mark !== "none")) return ""
+  const entries: Array<[NodeMark, string]> = [
+    ["held", "✓ card"],
+    ["due", "↻ due"],
+    ["current", "▶ now"],
+    ["none", "· to learn"],
+  ]
+  return entries
+    .filter(([mark]) => used.has(mark))
+    .map(([, label]) => label)
+    .join("   ")
 }
 
 export function planToMermaid(plan: Plan): string {

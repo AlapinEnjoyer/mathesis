@@ -1,4 +1,4 @@
-import { needsText, planLayers, progressBar, renderPlanDiagram, type NodeMark } from "./plan.ts"
+import { needsText, planLayers, planLegend, progressBar, renderPlanDiagram, type NodeMark } from "./plan.ts"
 import { cardCount, dueLabel, topicPlan, type Runtime } from "./runtime.ts"
 import { dueFirst, endOfDay, isDue } from "./srs/fsrs.ts"
 import { getSession } from "./state.ts"
@@ -42,11 +42,13 @@ export async function panel(rt: Runtime, sessionID: string): Promise<{ title: st
     }
     const learned = plan.nodes.filter((node) => byId.get(node.id)?.srs).length
     rows.push({ depth: 0, text: "" }, { depth: 0, text: `Plan  ${progressBar(learned, plan.nodes.length)}`, tone: "heading" })
-    for (const row of planLayers(plan, mark)) {
+    const layers = planLayers(plan, mark)
+    for (const row of layers) {
       if (row.first) rows.push({ depth: 0, text: row.layer, tone: "muted" })
       rows.push({ depth: 0, text: row.title, step: { n: row.n, mark: row.mark, needs: needsText(row.needs) }, ...(row.mark === "current" ? { tone: "current" as const } : {}) })
     }
-    rows.push({ depth: 0, text: "✓ card · ↻ due · ▶ now · · to learn", tone: "muted" })
+    const legend = planLegend(layers.map((row) => row.mark))
+    if (legend) rows.push({ depth: 0, text: legend, tone: "muted" })
     // The same boxes the topic note's plan describes, drawn by code so the panel shows the map without the model's help.
     rows.push({ depth: 0, text: "" }, { depth: 0, text: "Map", tone: "heading" })
     for (const line of renderPlanDiagram(plan).split("\n")) rows.push({ depth: 0, text: line, tone: "muted" })
