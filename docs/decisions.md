@@ -249,3 +249,6 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **The panel opens on every plan change** in the viewed session (it only opened once before; a learner who closed it
   and then got a rewrite never saw it). Closing it by hand still works with the key.
 - **`ctrl+x p` is the default panel key** (`ctrl+x m` is opencode's model picker); `panelKey: false` leaves it unbound.
+  It is bound as `<leader>p` (0.6.5): opencode does not read a literal `ctrl+x p` as the leader chord (the palette
+  listed the key but pressing it did nothing, found in tmux), so a `panelKey` starting with `ctrl+x ` is rewritten to
+  `<leader>`. The dictation keys were already `<leader>v/z/o`.
