@@ -256,3 +256,6 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   filled opencode's sidebar and pushed Context, the token count and the path off the screen, which looked like the
   sidebar was gone (reproduced in tmux on 0.6.5). `shortGoal` keeps the first line, cut to 60 characters. The full goal
   stays in the topic note. A session that already exists keeps its old title.
+- **Legend and map spacing (0.6.7).** The legend names only the marks the plan shows, is left out while every step is
+  still to learn, and is separated by spaces (`·` is also the "to learn" mark, which gave `now · · to learn`). Boxes
+  that are not joined by an arrow now touch, with no blank line, so the map takes less height.

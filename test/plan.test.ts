@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { depths, parsePlan, planLayers, planToMermaid, progressBar, readPlan, renderPlanDiagram, renderPlanTree, storePlan } from "../src/plan.ts"
+import { depths, parsePlan, planLayers, planLegend, planToMermaid, progressBar, readPlan, renderPlanDiagram, renderPlanTree, storePlan } from "../src/plan.ts"
 
 const ok = (text: string) => {
   const result = parsePlan(text)
@@ -74,13 +74,18 @@ describe("numbered layers", () => {
     ])
   })
 
+  test("the legend names only the marks in the plan, and none when nothing has started", () => {
+    expect(planLegend(["none", "none"])).toBe("")
+    expect(planLegend(["current", "none"])).toBe("▶ now   · to learn")
+    expect(planLegend(["none", "due", "held", "current"])).toBe("✓ card   ↻ due   ▶ now   · to learn")
+  })
+
   test("the box diagram joins a box to the next only when the next step needs it", () => {
     expect(renderPlanDiagram(plan)).toBe(
       [
         "┌────────────┐",
         "│ 1. A       │",
         "└────────────┘",
-        "",
         "┌────────────┐",
         "│ 2. B       │",
         "└─────┬──────┘",
