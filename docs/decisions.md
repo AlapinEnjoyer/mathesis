@@ -252,3 +252,7 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
   It is bound as `<leader>p` (0.6.5): opencode does not read a literal `ctrl+x p` as the leader chord (the palette
   listed the key but pressing it did nothing, found in tmux), so a `panelKey` starting with `ctrl+x ` is rewritten to
   `<leader>`. The dictation keys were already `<leader>v/z/o`.
+- **Titles use a short goal (0.6.6).** The session title and the panel title were the whole `/learn` text. A long goal
+  filled opencode's sidebar and pushed Context, the token count and the path off the screen, which looked like the
+  sidebar was gone (reproduced in tmux on 0.6.5). `shortGoal` keeps the first line, cut to 60 characters. The full goal
+  stays in the topic note. A session that already exists keeps its old title.

@@ -3,7 +3,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { review } from "../src/srs/fsrs.ts"
-import { slugify, topicSlug, Vault } from "../src/store/vault.ts"
+import { shortGoal, slugify, topicSlug, Vault } from "../src/store/vault.ts"
 
 const now = new Date("2026-10-30T10:00:00.000Z")
 let root: string
@@ -288,5 +288,15 @@ describe("topics and sessions", () => {
     expect(text).toContain("sessions: [ses_1, ses_2]")
     expect(text.indexOf("Q1")).toBeLessThan(text.indexOf("Q2"))
     expect(text).toContain("### Q3\nthird\n")
+  })
+})
+
+describe("shortGoal", () => {
+  test("keeps the first line and cuts a long goal", () => {
+    expect(shortGoal("Learn binary search")).toBe("Learn binary search")
+    expect(shortGoal("First line\n### Second\n```tree```")).toBe("First line")
+    const cut = shortGoal("x ".repeat(100), 20)
+    expect(cut.length).toBe(20)
+    expect(cut.endsWith("…")).toBe(true)
   })
 })

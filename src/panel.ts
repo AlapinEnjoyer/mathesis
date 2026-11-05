@@ -2,6 +2,7 @@ import { needsText, planLayers, progressBar, renderPlanDiagram, type NodeMark } 
 import { cardCount, dueLabel, topicPlan, type Runtime } from "./runtime.ts"
 import { dueFirst, endOfDay, isDue } from "./srs/fsrs.ts"
 import { getSession } from "./state.ts"
+import { shortGoal } from "./store/vault.ts"
 import { readLog, type LogEntry, type ReviewEntry } from "./store/log.ts"
 
 const DUE_SHOWN = 10
@@ -23,7 +24,7 @@ export async function panel(rt: Runtime, sessionID: string): Promise<{ title: st
   const byId = new Map(ideas.map((idea) => [idea.id, idea]))
   const rows: PanelRow[] = []
   const topic = state?.topic ? await rt.vault.readTopic(state.topic).catch(() => undefined) : undefined
-  const title = topic ? `Mathesis: ${topic.goal}` : state ? `Mathesis: ${state.phase}` : "Mathesis"
+  const title = topic ? `Mathesis: ${shortGoal(topic.goal)}` : state ? `Mathesis: ${state.phase}` : "Mathesis"
   if (state) {
     rows.push({ depth: 0, text: `Phase: ${state.phase}${state.done?.length ? ` · done this session: ${state.done.length}` : ""}`, tone: "muted" })
     const summary = sessionSummary(entries.filter((entry) => entry.sessionID === sessionID))

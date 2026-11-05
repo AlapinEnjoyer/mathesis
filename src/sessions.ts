@@ -6,7 +6,7 @@ import type { ModelRef, ModelRole } from "./config.ts"
 import type { ModelRefInput, SetupInput, StartInput } from "./rpc.ts"
 import { topicPlan, type Runtime } from "./runtime.ts"
 import { setPhase } from "./state.ts"
-import { isSlug, slugify, topicSlug } from "./store/vault.ts"
+import { isSlug, shortGoal, slugify, topicSlug } from "./store/vault.ts"
 
 type Ctx = Plugin.Context
 
@@ -128,7 +128,7 @@ export async function startSession(ctx: Ctx, rt: Runtime, input: StartInput): Pr
   if (!hasAgent) notices.push("The mathesis agent is not set up yet; run /mathesis-setup. This session uses the default agent.")
 
   const title =
-    input.kind === "learn" ? `Mathesis: ${goal}` : `Mathesis: ${input.kind === "recall" ? "review" : "practice"}${topicId ? ` (${topicId})` : ""}`
+    input.kind === "learn" ? `Mathesis: ${shortGoal(goal ?? "")}` : `Mathesis: ${input.kind === "recall" ? "review" : "practice"}${topicId ? ` (${topicId})` : ""}`
   await rt.vault.ensure()
   const session = await ctx.session.create({
     title,
