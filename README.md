@@ -59,7 +59,7 @@ With options. opencode passes options to each part from its own config file: the
 // ~/.config/opencode/cli.json
 {
   "plugins": [
-    { "package": "opencode-mathesis", "options": { "notify": true, "panelKey": "ctrl+x p" } }
+    { "package": "opencode-mathesis", "options": { "notify": true, "panelKey": "<leader>p" } }
   ]
 }
 ```
@@ -76,7 +76,7 @@ the TUI part into `dist/`), then put the absolute path of the checkout in `plugi
 | `/recall [topic]` | Spaced review of the cards due today, interleaved across topics (at most 20 per session). |
 | `/practice [topic]` | Interleaved practice problems built from the cards you hold, weakest first. |
 | `/mathesis` | Status: cards due per topic (or the next review date), recent lapses, misconceptions, and your calibration: how often you were right at each confidence you gave. |
-| `/mathesis panel`, `/mathesis-panel` | Toggles the side panel (key `ctrl+x p`, change it with the `panelKey` option, `false` unbinds): what this session did so far, the plan as numbered steps in layers (Start / Then / Later / Goal) with a progress bar and coloured marks, the same plan drawn as boxes, and the cards due today. It opens by itself whenever the plan is set or changed in the session you are viewing. |
+| `/mathesis panel`, `/mathesis-panel` | Toggles the side panel (key `ctrl+x p`, which is `<leader>p`; change it with the `panelKey` option, `false` unbinds): what this session did so far, the plan as numbered steps in layers (Start / Then / Later / Goal) with a progress bar and coloured marks, the same plan drawn as boxes, and the cards due today. It opens by itself whenever the plan is set or changed in the session you are viewing. |
 
 You don't need the commands every time: switch to the `mathesis` agent and say what you want to learn.
 

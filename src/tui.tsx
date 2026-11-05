@@ -583,6 +583,10 @@ export default Plugin.define({
       playback?.stop()
     })
 
+    function panelKey(option: unknown): string {
+      return typeof option === "string" && option.trim() ? option.trim().replace(/^ctrl\+x\s+/i, "<leader>") : "<leader>p"
+    }
+
     function togglePanel() {
       const route = context.ui.router.current()
       const current = context.ui.panel.current()
@@ -642,8 +646,9 @@ export default Plugin.define({
           group: "Mathesis",
           palette: true,
           slash: { name: "mathesis-panel" },
-          // `ctrl+x p` by default; change it with the plugin option `panelKey` (`false` leaves it unbound), or through the keybind config by id.
-          ...(context.options.panelKey === false ? {} : { bind: typeof context.options.panelKey === "string" ? context.options.panelKey : "ctrl+x p" }),
+          // `<leader>p` by default (opencode's leader is ctrl+x). A literal "ctrl+x p" is not the leader chord in opencode, so it is
+          // read as `<leader>p`. Change it with the plugin option `panelKey` (`false` leaves it unbound), or through the keybind config by id.
+          ...(context.options.panelKey === false ? {} : { bind: panelKey(context.options.panelKey) }),
           run: () => togglePanel(),
         },
         {
