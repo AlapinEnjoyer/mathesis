@@ -128,10 +128,13 @@ export const Mathesis = Rpc.define({
         ["title", "rows"],
       ),
     },
-    /** Turns recorded speech (a base64 WAV) into text with the `voice.stt` plugin option; for clients without a shell. */
+    /**
+     * Turns recorded speech (a base64 WAV) into text with the `voice.stt` plugin option; for clients without a shell.
+     * A failure comes back as `error`: the host reduces a thrown error to "RPC call failed".
+     */
     transcribe: {
       input: obj({ audio: str }, ["audio"]),
-      output: obj({ text: str }, ["text"]),
+      output: obj({ text: str, error: str }, ["text"]),
     },
     /** The number of due cards (cheap; for the footer), the next due date when none is due, and whether setup is needed. */
     due: {

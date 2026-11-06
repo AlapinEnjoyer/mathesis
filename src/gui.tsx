@@ -1,7 +1,7 @@
 /** @jsxImportSource solid-js */
 /// <reference lib="dom" />
 import { Command, ComposerPill, Panel, Plugin, type PanelProps, type PanelTab, type SessionRef } from "@opencode/plugin/gui"
-import { createEffect, createResource, createSignal, For, onCleanup, onMount, Show } from "solid-js"
+import { createEffect, createSignal, For, onCleanup, onMount, Show, type Accessor } from "solid-js"
 import { layoutPlan, MAP_PADDING, NODE_HEIGHT, NODE_WIDTH } from "./plan-layout.ts"
 import type { FormField, FormSpec } from "./questions.ts"
 import { Mathesis, type StartInput } from "./rpc.ts"
@@ -25,7 +25,33 @@ type Location = unknown
 type Row = { text: string; tone?: string; plan?: boolean; step?: { n: number; mark: string; needs: string } }
 type View = { title: string; rows: Row[]; progress?: { learned: number; total: number } }
 type Step = { n: number; title: string; mark: string; needs: number[] }
-const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error))
+/** RPC failures reach the window as plain objects, not as `Error`s. */
+function errorText(error: unknown): string {
+  if (typeof error === "string") return error
+  if (typeof error !== "object" || error === null) return String(error)
+  const { message, data } = error as { message?: unknown; data?: unknown }
+  if (typeof message === "string") return message
+  return data ? errorText(data) : JSON.stringify(error)
+}
+
+/**
+ * `createResource` without Suspense: a resource read while it loads suspends the host's session view, which takes the
+ * whole chat out of the page and back, and a long chat loses its place. `load` runs again when what it reads changes.
+ */
+function loaded<T>(load: () => Promise<T>): Accessor<T | undefined> {
+  const [value, setValue] = createSignal<T>()
+  let latest = 0
+  createEffect(() => {
+    const run = ++latest
+    load().then(
+      (result) => {
+        if (run === latest) setValue(() => result)
+      },
+      () => {},
+    )
+  })
+  return value
+}
 
 /** Records from the microphone as 16 kHz samples; `stop` returns a WAV. */
 async function startRecording() {
@@ -61,7 +87,7 @@ export default Plugin.define({
     const tab: PanelTab = { id: TAB, title: "Mathesis" }
     const [tick, bump] = createSignal(0)
     const changed = () => void bump((n) => n + 1)
-    const questionTab: PanelTab = { id: QUESTION_TAB, title: "Question", closable: false }
+    const questionTab: PanelTab = { id: QUESTION_TAB, title: "Question" }
     const questionKey = `${ctx.id}:${QUESTION_TAB}`
     /** The open question of each session. */
     const [questions, setQuestions] = createSignal<Record<string, { form: FormSpec; location?: Location }>>({})
@@ -117,10 +143,10 @@ export default Plugin.define({
     }
 
     function PlanView(props: { sessionID: string; location?: Location }) {
-      const [view] = createResource(
-        () => [props.sessionID, tick()] as const,
-        ([sessionID]) => rpc().panel({ sessionID }, at(props.location)) as Promise<View>,
-      )
+      const view = loaded(() => {
+        tick()
+        return rpc().panel({ sessionID: props.sessionID }, at(props.location)) as Promise<View>
+      })
       const rows = () => view()?.rows ?? []
       const steps = (): Step[] =>
         rows().flatMap((row) =>
@@ -201,7 +227,11 @@ export default Plugin.define({
           if (active.field !== field || !active.stop) return
           setRecording(undefined)
           setStatus({ field, text: "Transcribing…" })
-          const result = (await rpc().transcribe({ audio: toBase64(await active.stop()) }, at(props.location))) as { text: string }
+          const result = (await rpc().transcribe({ audio: toBase64(await active.stop()) }, at(props.location))) as { text: string; error?: string }
+          if (result.error) {
+            setStatus({ field, text: result.error })
+            return
+          }
           const before = (values()[field] ?? "").trim()
           set(field, before ? `${before} ${result.text}` : result.text)
           if (result.text) dictated.push({ field, text: result.text })
@@ -329,7 +359,7 @@ export default Plugin.define({
       if (!formID || broughtForward.has(formID)) return
       broughtForward.add(formID)
       dismissWaiting(formID)
-      ctx.layout.open(questionKey, session)
+      ctx.layout.open(questionKey, session, { tab: "select" })
     }
 
     function dismissWaiting(formID: string) {
@@ -343,12 +373,8 @@ export default Plugin.define({
       broughtForward.delete(formID)
       const entry = Object.entries(questions()).find(([, question]) => question.form.id === formID)
       if (!entry) return
+      // The tab stays for the next question: closing the last tab would close the side area and resize the chat.
       setQuestions(({ [entry[0]]: _, ...rest }) => rest)
-      const session = ctx.sessions.current()
-      if (session?.id === entry[0]) {
-        ctx.layout.close(questionKey, session)
-        ctx.layout.open(key, session)
-      }
     }
 
     /**
@@ -452,9 +478,10 @@ export default Plugin.define({
     add("setup", "Mathesis: setup", "mathesis-setup", setup, false)
 
     // The due count above the composer; a click starts the review.
-    const [due] = createResource(tick, () =>
-      (rpc().due({}, at(ctx.sessions.current()?.location)) as Promise<{ due: number }>).then((result) => result.due).catch(() => 0),
-    )
+    const due = loaded(() => {
+      tick()
+      return (rpc().due({}, at(ctx.sessions.current()?.location)) as Promise<{ due: number }>).then((result) => result.due).catch(() => 0)
+    })
     const dueTimer = setInterval(changed, DUE_REFRESH_MS)
     onCleanup(() => clearInterval(dueTimer))
     ctx.add(ComposerPill, {
@@ -465,14 +492,19 @@ export default Plugin.define({
     ctx.add(Panel, {
       id: TAB,
       region: "side",
-      list: (input) => [...(input.open.includes(TAB) ? [tab] : []), ...(questions()[input.session.id] ? [questionTab] : [])],
+      list: (input) => [
+        ...(input.open.includes(TAB) ? [tab] : []),
+        ...(questions()[input.session.id] || input.open.includes(QUESTION_TAB) ? [questionTab] : []),
+      ],
       render: (props: PanelProps) => (
-        <Show
-          when={props.tab.id === QUESTION_TAB && questions()[props.session.id]}
-          keyed
-          fallback={<PlanView sessionID={props.session.id} location={props.session.location} />}
-        >
-          {(question) => <Question form={question.form} location={question.location} />}
+        <Show when={props.tab.id === QUESTION_TAB} fallback={<PlanView sessionID={props.session.id} location={props.session.location} />}>
+          <Show
+            when={questions()[props.session.id]}
+            keyed
+            fallback={<div style={{ padding: "16px", ...MUTED }}>Nothing to answer right now. The next question opens here.</div>}
+          >
+            {(question) => <Question form={question.form} location={question.location} />}
+          </Show>
         </Show>
       ),
     })
@@ -487,7 +519,7 @@ export default Plugin.define({
         if (!session) ctx.toast.show({ title: "Open a session first." })
         // With a question open the key flips between it and the plan; closing the tab would hide neither.
         else if (!questions()[session.id]) ctx.layout.toggle(key, session)
-        else if (ctx.layout.state(key, session) === "visible") ctx.layout.open(questionKey, session)
+        else if (ctx.layout.state(key, session) === "visible") ctx.layout.open(questionKey, session, { tab: "select" })
         else ctx.layout.open(key, session, { tab: "select" })
       },
     })
@@ -516,7 +548,7 @@ export default Plugin.define({
       events.on("planUpdated", (event) => {
         changed()
         const session = ctx.sessions.current()
-        if (session?.id === (event.data as { sessionID: string }).sessionID) ctx.layout.open(key, session)
+        if (session?.id === (event.data as { sessionID: string }).sessionID) ctx.layout.open(key, session, { tab: "select" })
       }),
       events.on("questionAsked", (event) => {
         const location = (event as { location?: Location }).location
