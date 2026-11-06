@@ -110,11 +110,13 @@ export default Plugin.define({
       panel: async (input) => panel(rt, (input as { sessionID: string }).sessionID),
       transcribe: async (input) => {
         const { stt } = parseVoice(ctx.options.voice)
-        if (!stt) throw new Error('Dictation needs `voice.stt` in the plugin options in opencode.jsonc.')
+        if (!stt) return { text: "", error: "Dictation needs `voice.stt` in the plugin options in opencode.jsonc." }
         const file = join(tmpdir(), `mathesis-${crypto.randomUUID()}.wav`)
-        await writeFile(file, Buffer.from((input as { audio: string }).audio, "base64"))
         try {
+          await writeFile(file, Buffer.from((input as { audio: string }).audio, "base64"))
           return { text: await transcribe(stt, file) }
+        } catch (error) {
+          return { text: "", error: `Dictation failed: ${error instanceof Error ? error.message : String(error)}` }
         } finally {
           await rm(file, { force: true })
         }

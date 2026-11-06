@@ -269,6 +269,13 @@ and the spike results (`docs/spike.md`) hold the earlier decisions.
 - **Questions are a side-panel tab, not a dialog.** A dialog hid the chat, overflowed the window with the confidence
   options, cancelled on close, and blocks host keybinds. The tab keeps drafts and has an explicit Skip. No native form is
   created: `claim`, `shown` and `relay` work unchanged.
+- **The Question tab stays after a submit (0.7.1).** Between questions it shows a short note and the next question
+  reuses it, so the learner is not moved to the plan, and the side area does not close. The learner can close it then.
+- **No `createResource` in the GUI (0.7.1).** Reading a resource while it loads suspends the host's session view, which
+  takes the chat out of the page and back, so every `sessionChanged`, `cardsChanged` and due refresh rebuilt it and a
+  long chat could lose its place. `loaded` in `src/gui.tsx` does the same with a plain signal.
+- **Tabs open with `{ tab: "select" }`.** The default reuses the preview slot, so the plan and the question replaced
+  each other.
 - **Only claim sessions open here.** Desktop and the TUI share one background service and the first claim wins, so a
   Desktop that claimed everything would take questions away from the terminal.
 - **The plan is drawn by us** (`src/plan-layout.ts`), not mermaid: state colours, one view instead of a list plus graph.
